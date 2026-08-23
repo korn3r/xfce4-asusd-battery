@@ -51,7 +51,7 @@ or compile yourself:
 # Clone the repository
 git clone https://github.com/korn3r/xfce4-asusd-battery.git
 cd xfce4-asusd-battery
-
+```
 # Bundled help screen
 
 ```
