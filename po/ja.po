@@ -1,0 +1,144 @@
+# Japanese translations for xfce4-asusd-battery
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 00:00+0000\n"
+"PO-Revision-Date: 2024-01-01 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Japanese <ja@li.org>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: xfce4-asusd-battery.c
+msgid "Manage performance profile"
+msgstr "パフォーマンスプロファイルを管理"
+
+#: xfce4-asusd-battery.c
+msgid "ASUSD not available"
+msgstr "ASUSDが利用できません"
+
+#: xfce4-asusd-battery.c
+msgid "Please install asusd to manage power profiles"
+msgstr "電源プロファイルを管理するにはasusdをインストールしてください"
+
+#: xfce4-asusd-battery.c
+msgid "Power Profile Settings"
+msgstr "電源プロファイル設定"
+
+#: xfce4-asusd-battery.c
+msgid "_Close"
+msgstr "_閉じる"
+
+#: xfce4-asusd-battery.c
+msgid "Auto switch profiles"
+msgstr "プロファイル自動切替"
+
+#: xfce4-asusd-battery.c
+msgid "On AC"
+msgstr "AC電源"
+
+#: xfce4-asusd-battery.c
+msgid "On Battery"
+msgstr "バッテリー駆動"
+
+#: xfce4-asusd-battery.c
+msgid "Profile names and icons"
+msgstr "プロファイル名とアイコン"
+
+#: xfce4-asusd-battery.c
+msgid "Hide icon"
+msgstr "アイコンを隠す"
+
+#: xfce4-asusd-battery.c
+msgid "Hide text"
+msgstr "テキストを隠す"
+
+#: xfce4-asusd-battery.c
+msgid "Custom name"
+msgstr "カスタム名"
+
+#: xfce4-asusd-battery.c
+msgid "Icon name"
+msgstr "アイコン名"
+
+#: xfce4-asusd-battery.c
+msgid "Settings"
+msgstr "設定"
+
+#: xfce4-asusd-battery.c
+msgid "About"
+msgstr "情報"
+
+#: xfce4-asusd-battery.c
+msgid "About ASUS Battery Plugin"
+msgstr "ASUS Battery プラグインについて"
+
+#: xfce4-asusd-battery.c
+msgid "Version 1.0"
+msgstr "バージョン 1.0"
+
+#: xfce4-asusd-battery.c
+msgid "<small>Plugin for managing ASUS laptop power profiles via asusd.\n"
+"Allows switching between performance, balanced and quiet modes.</small>"
+msgstr "<small>asusdを使用してASUSラップトップの電源プロファイルを管理するプラグイン。\n"
+"パフォーマンス、バランス、静音モード間の切り替えが可能です。</small>"
+
+#: xfce4-asusd-battery.c
+msgid "Limit battery charge to 80%"
+msgstr "バッテリー充電を80%に制限"
+
+#: xfce4-asusd-battery.c
+msgid "One-shot full charge"
+msgstr "一回限りのフル充電"
+
+#: xfce4-asusd-battery.c
+msgid "Start"
+msgstr "開始"
+
+#: xfce4-asusd-battery.c
+msgid "Charge battery to 100% once, ignoring the 80% limit"
+msgstr "バッテリーを一回だけ100%まで充電し、80%制限を無視"
+
+#: xfce4-asusd-battery.c
+msgid "Charge battery to 100%% once?\n\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr "バッテリーを一回だけ100%%まで充電しますか？\n\n"
+"これにより80%%の充電制限が一時的に解除されます。\n"
+"制限は次の充電サイクル後に復元されます。"
+
+#: xfce4-asusd-battery.c
+msgid "Failed to start one-shot full charge:\n%s"
+msgstr "一回限りのフル充電の開始に失敗しました:\n%s"
+
+#: xfce4-asusd-battery.c
+msgid "One-shot full charge started.\n\nThe battery will charge to 100%% once."
+msgstr "一回限りのフル充電が開始されました。\n\nバッテリーが一回だけ100%%まで充電されます。"
+
+#: xfce4-asusd-battery.desktop.in
+msgid "ASUS Battery"
+msgstr "ASUS Battery"
+
+#: xfce4-asusd-battery.desktop.in
+msgid "Manage ASUS laptop power profiles via asusd"
+msgstr "asusdを使用してASUSラップトップの電源プロファイルを管理"
+
+#: xfce4-asusd-battery.c
+msgid "<b>ASUS Battery</b>"
+msgstr "<b>ASUS Battery</b>"
+
+#: xfce4-asusd-battery.c
+msgid "<small><b>Authors:</b> Deepseek and korn3r</small>"
+msgstr "<small><b>作成者:</b> Deepseek and korn3r</small>"
+
+#: xfce4-asusd-battery.c
+msgid "Close"
+msgstr "閉じる"
+
+#: xfce4-asusd-battery.c
+msgid "xfce4-asusd-battery"
+msgstr "xfce4-asusd-battery"

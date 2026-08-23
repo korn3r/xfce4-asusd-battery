@@ -1,0 +1,144 @@
+# Maori translations for xfce4-asusd-battery
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 00:00+0000\n"
+"PO-Revision-Date: 2024-01-01 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Maori <mi@li.org>\n"
+"Language: mi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: xfce4-asusd-battery.c
+msgid "Manage performance profile"
+msgstr "Whakahaere i te kōnae mahi"
+
+#: xfce4-asusd-battery.c
+msgid "ASUSD not available"
+msgstr "Kāore e wātea ana te ASUSD"
+
+#: xfce4-asusd-battery.c
+msgid "Please install asusd to manage power profiles"
+msgstr "Tēnā whakauruhia te asusd hei whakahaere i ngā kōnae hiko"
+
+#: xfce4-asusd-battery.c
+msgid "Power Profile Settings"
+msgstr "Ngā tautuhinga kōnae hiko"
+
+#: xfce4-asusd-battery.c
+msgid "_Close"
+msgstr "_Katia"
+
+#: xfce4-asusd-battery.c
+msgid "Auto switch profiles"
+msgstr "Whakawhiti kōnae aunoa"
+
+#: xfce4-asusd-battery.c
+msgid "On AC"
+msgstr "I runga i te AC"
+
+#: xfce4-asusd-battery.c
+msgid "On Battery"
+msgstr "I runga i te pākahiko"
+
+#: xfce4-asusd-battery.c
+msgid "Profile names and icons"
+msgstr "Ngā ingoa kōnae me ngā tohu"
+
+#: xfce4-asusd-battery.c
+msgid "Hide icon"
+msgstr "Huna i te tohu"
+
+#: xfce4-asusd-battery.c
+msgid "Hide text"
+msgstr "Huna i te kuputuhi"
+
+#: xfce4-asusd-battery.c
+msgid "Custom name"
+msgstr "Ingoa ritenga"
+
+#: xfce4-asusd-battery.c
+msgid "Icon name"
+msgstr "Ingoa tohu"
+
+#: xfce4-asusd-battery.c
+msgid "Settings"
+msgstr "Tautuhinga"
+
+#: xfce4-asusd-battery.c
+msgid "About"
+msgstr "Mō"
+
+#: xfce4-asusd-battery.c
+msgid "About ASUS Battery Plugin"
+msgstr "Mō te Tāpiri ASUS Battery"
+
+#: xfce4-asusd-battery.c
+msgid "Version 1.0"
+msgstr "Putanga 1.0"
+
+#: xfce4-asusd-battery.c
+msgid "<small>Plugin for managing ASUS laptop power profiles via asusd.\n"
+"Allows switching between performance, balanced and quiet modes.</small>"
+msgstr "<small>He tāpiri mō te whakahaere i ngā kōnae hiko o ngā rorohiko kawe ASUS mā te asusd.\n"
+"Ka taea te whakawhiti i waenga i ngā aratau mahi, taurite me te noho puku.</small>"
+
+#: xfce4-asusd-battery.c
+msgid "Limit battery charge to 80%"
+msgstr "Whakawhāiti i te utu pākahiko ki te 80%"
+
+#: xfce4-asusd-battery.c
+msgid "One-shot full charge"
+msgstr "Utu kī katoa kotahi"
+
+#: xfce4-asusd-battery.c
+msgid "Start"
+msgstr "Tīmata"
+
+#: xfce4-asusd-battery.c
+msgid "Charge battery to 100% once, ignoring the 80% limit"
+msgstr "Utua te pākahiko ki te 100% kotahi, waiho i te whakawhāiti 80%"
+
+#: xfce4-asusd-battery.c
+msgid "Charge battery to 100%% once?\n\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr "Utua te pākahiko ki te 100%% kotahi?\n\n"
+"Ka whakakorengia te whakawhāiti utu 80%% mō te wā poto.\n"
+"Ka whakahokia te whakawhāiti i muri i te huringa utu e whai ake nei."
+
+#: xfce4-asusd-battery.c
+msgid "Failed to start one-shot full charge:\n%s"
+msgstr "I rahua te tīmata i te utu kī katoa kotahi:\n%s"
+
+#: xfce4-asusd-battery.c
+msgid "One-shot full charge started.\n\nThe battery will charge to 100%% once."
+msgstr "Kua tīmata te utu kī katoa kotahi.\n\nKa utua te pākahiko ki te 100%% kotahi."
+
+#: xfce4-asusd-battery.desktop.in
+msgid "ASUS Battery"
+msgstr "ASUS Battery"
+
+#: xfce4-asusd-battery.desktop.in
+msgid "Manage ASUS laptop power profiles via asusd"
+msgstr "Whakahaere i ngā kōnae hiko o ngā rorohiko kawe ASUS mā te asusd"
+
+#: xfce4-asusd-battery.c
+msgid "<b>ASUS Battery</b>"
+msgstr "<b>ASUS Battery</b>"
+
+#: xfce4-asusd-battery.c
+msgid "<small><b>Authors:</b> Deepseek and korn3r</small>"
+msgstr "<small><b>Ngā Kaituhi:</b> Deepseek me korn3r</small>"
+
+#: xfce4-asusd-battery.c
+msgid "Close"
+msgstr "Katia"
+
+#: xfce4-asusd-battery.c
+msgid "xfce4-asusd-battery"
+msgstr "xfce4-asusd-battery"
