@@ -86,6 +86,7 @@ Examples:
 ```
 
 # Build and install
+```
 make
 sudo make install
 
