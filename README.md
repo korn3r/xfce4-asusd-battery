@@ -10,7 +10,7 @@ XFCE panel plugin for managing laptop power profiles [asusd](https://github.com/
 - **Profile switching**: Switch between available performance profiles with a single click.
 - **Battery charge limit**: Set battery charge limit to 80% to extend battery lifespan.
 - **Customizable display**: Rename profiles and assign custom GTK icons for each mode.
-- **Hide elements**: Option to hide icon or text independently.
+- **Hide elements**: Option to hide icon, text and/or plugin notifications.
 - **i18n support**: Built-in translations for multiple languages (mostly AI-generated, but its a simple plugin without complicated texts anyway).
 - **D-Bus integration**: Instant response to power status changes using D-Bus signals.
 
@@ -46,7 +46,7 @@ sudo zypper install make gcc pkg-config glib2-devel gtk3-devel libxfce4util-deve
 
 for build dependencies for asusctl please check [asusctl github page](https://github.com/OpenGamingCollective/asusctl).
 
-this is optional - the only requirement is to have asusd installed in general, so you can do it in any convinient way.
+this is optional: the only requirement is to have asusd daemon installed in general, so you can do it in any convinient way.
 
 ```
 git clone https://github.com/OpenGamingCollective/asusctl.git
