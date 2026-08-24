@@ -593,14 +593,11 @@ static gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
     return (gchar**)g_ptr_array_free(result, FALSE);
 }
 
-/* Обработка изменения свойств ASUSD - обрабатываем ВСЕ свойства в сигнале */
+/* Обработка изменения свойств ASUSD - БЕЗ saving_settings guard */
 static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant *changed_properties) {
     if (!plugin || !changed_properties) return;
 
-    if (plugin->saving_settings) {
-        g_debug("asusd_handle_properties_changed: IGNORED (saving_settings)");
-        return;
-    }
+    /* saving_settings не блокирует D-Bus синхронизацию */
 
     /* PlatformProfile - обновляем состояние, даже если значение не изменилось */
     GVariant *profile_variant = g_variant_lookup_value(changed_properties, 
@@ -613,7 +610,6 @@ static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant
 
         const gchar *name = profile_name_from_enum(plugin, enum_value);
 
-        /* Обновляем состояние в любом случае, но уведомление отправляем только при реальном изменении */
         if (!plugin->current_profile || g_strcmp0(plugin->current_profile, name) != 0) {
             g_debug("  PlatformProfile changed to %u (%s)", enum_value, name);
             g_free(plugin->current_profile);
@@ -1123,7 +1119,7 @@ static void setup_upower_monitoring(AsusdBatteryPlugin *plugin) {
     }
 }
 
-/* D-Bus сигналы - исправленная версия с правильной сигнатурой */
+/* D-Bus сигналы - правильная сигнатура gpointer user_data */
 static void on_dbus_signal(GDBusConnection *connection, const gchar *sender_name,
                            const gchar *object_path, const gchar *interface_name,
                            const gchar *signal_name, GVariant *parameters,
@@ -1569,7 +1565,7 @@ static void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *p
     }
 }
 
-/* Обработчик кнопки "Применить" - исправленная версия с проверкой результатов */
+/* Обработчик кнопки "Применить" */
 static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->settings_dialog_open) return;
     
@@ -1617,7 +1613,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     }
     
     /* ============================================================
-     * НАСТРОЙКИ ASUSD - проверяем ВСЕ результаты Set
+     * НАСТРОЙКИ ASUSD
      * ============================================================ */
     gboolean current_ac_enabled = FALSE;
     gboolean current_battery_enabled = FALSE;
@@ -1776,8 +1772,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
             set_failed = TRUE;
         } else {
             g_debug("  Applied ChargeControlEndThreshold = %d", new_limit);
-            plugin->battery_limit_enabled = new_limit_enabled;
-            plugin->current_battery_limit = new_limit;
+            /* НЕ обновляем plugin->battery_limit_enabled и plugin->current_battery_limit здесь */
         }
     }
     
@@ -1809,6 +1804,9 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         g_free(plugin->auto_switch_battery_profile);
         plugin->auto_switch_battery_profile = g_strdup(new_battery_profile);
     }
+    /* Обновляем battery limit только после успешного применения */
+    plugin->battery_limit_enabled = new_limit_enabled;
+    plugin->current_battery_limit = new_limit;
     
     save_settings(plugin);
     g_debug("  Changes applied successfully");
