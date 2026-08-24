@@ -2422,6 +2422,14 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
         return;
     }
     
+    /* Если dialog_state существует, но диалог не открыт - это ошибка состояния */
+    if (plugin->dialog_state) {
+        g_warning("create_settings_dialog: dialog_state already exists but dialog is not open");
+        /* Освобождаем старый state, так как он в некорректном состоянии */
+        g_free(plugin->dialog_state);
+        plugin->dialog_state = NULL;
+    }
+    
     GtkWidget *dialog;
     GtkWidget *content_area;
     GtkWidget *vbox;
@@ -2462,11 +2470,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     plugin->settings_dialog_open = TRUE;
     plugin->saving_settings = FALSE;
     
-    /* Создаем состояние диалога */
-    if (plugin->dialog_state) {
-        g_free(plugin->dialog_state);
-        plugin->dialog_state = NULL;
-    }
+    /* Создаем новое состояние диалога */
     plugin->dialog_state = g_new0(SettingsDialogState, 1);
     SettingsDialogState *state = plugin->dialog_state;
     settings_dialog_reset_dirty(plugin);
