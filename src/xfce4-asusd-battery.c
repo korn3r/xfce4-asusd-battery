@@ -513,6 +513,7 @@ static gboolean asusd_load_supported_profiles(AsusdBatteryPlugin *plugin) {
         return FALSE;
     }
 
+    /* Очищаем старые данные */
     if (plugin->profiles) {
         g_ptr_array_free(plugin->profiles, TRUE);
         plugin->profiles = NULL;
@@ -562,7 +563,22 @@ static gboolean asusd_load_supported_profiles(AsusdBatteryPlugin *plugin) {
     g_variant_unref(value);
     
     g_debug("ASUSD: Loaded %d profiles", plugin->profiles ? plugin->profiles->len : 0);
-    return (plugin->profiles && plugin->profiles->len > 0);
+    
+    /* Проверяем, что профили загружены */
+    if (!plugin->profiles || plugin->profiles->len == 0) {
+        g_warning("ASUSD: No profiles loaded");
+        if (plugin->profiles) {
+            g_ptr_array_free(plugin->profiles, TRUE);
+            plugin->profiles = NULL;
+        }
+        if (plugin->profile_lookup) {
+            g_hash_table_destroy(plugin->profile_lookup);
+            plugin->profile_lookup = NULL;
+        }
+        return FALSE;
+    }
+    
+    return TRUE;
 }
 
 /* Получение текущего профиля (только для инициализации) */
@@ -2024,6 +2040,8 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Failed to read current settings from ASUSD."),
                              TRUE, "emblem-readonly");
         }
+        /* Убеждаемся, что saving_settings сброшен */
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -2036,6 +2054,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Failed to read current settings from ASUSD."),
                              TRUE, "emblem-readonly");
         }
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -2053,6 +2072,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Failed to read current settings from ASUSD."),
                              TRUE, "emblem-readonly");
         }
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -2071,6 +2091,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Failed to read current settings from ASUSD."),
                              TRUE, "emblem-readonly");
         }
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -2085,6 +2106,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Failed to read current settings from ASUSD."),
                              TRUE, "emblem-readonly");
         }
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -2163,6 +2185,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         g_free(current_battery_profile);
         g_free(new_ac_profile);
         g_free(new_battery_profile);
+        plugin->saving_settings = FALSE;
         return;
     }
     
