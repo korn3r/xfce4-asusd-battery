@@ -1,5 +1,5 @@
 # WIP
-Work in progress - code is not in good shape yet.
+Work in progress - code is not in good shape yet. Translations are temporary outdated because of frequent code changes, but plugin generally already works.
 
 # xfce4-asusd-battery
 
@@ -146,4 +146,4 @@ Authors
 - asusctl software
 
 ## Donations
-If you would like this plugin and want to support someone, you can donate to asusctl developers. Links are on [asusctl Github page](https://github.com/OpenGamingCollective/asusctl).
+If you like this plugin and want to support someone, you can donate to asusctl developers. Links are on [asusctl Github page](https://github.com/OpenGamingCollective/asusctl).
