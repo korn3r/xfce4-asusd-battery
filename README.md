@@ -55,7 +55,7 @@ or compile yourself:
 git clone https://github.com/korn3r/xfce4-asusd-battery.git
 cd xfce4-asusd-battery
 ```
-# Bundled help screen
+### Bundled help screen
 
 ```
 # make help
@@ -88,7 +88,7 @@ Examples:
 
 ```
 
-# Build and install
+## Build and install
 ```
 make
 sudo make install
@@ -97,7 +97,7 @@ sudo make install
 xfce4-panel -r
 ```
 
-# Uninstall
+## Uninstall
 
 ```
 sudo make uninstall
@@ -128,6 +128,7 @@ For each profile, you can customize:
 
 - Hide icon: Show only text on the panel
 - Hide text: Show only icon on the panel
+- Hide notifications: Dont show app notifications
 
 # License
 
@@ -136,6 +137,7 @@ Authors
 
 - korn3r — implementation, testing and integration
 - Deepseek — architecture, design & code assistance
+- ChatGPT - code review, architectural suggestions, bug hunting
 
 # Acknowledgments
 
