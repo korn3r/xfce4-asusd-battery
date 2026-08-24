@@ -16,28 +16,6 @@ XFCE panel plugin for managing laptop power profiles [asusd](https://github.com/
 
 # Dependencies
 
-The main one: [asusd](https://github.com/OpenGamingCollective/asusctl) daemon up and running. 
-
-### How to install only asusd daemon
-
-for build dependencies for asusctl please check [asusctl github page](https://github.com/OpenGamingCollective/asusctl).
-
-this is optional - the only requirement is to have asusd installed in general, so you can do it in any convinient way.
-
-```
-git clone https://github.com/OpenGamingCollective/asusctl.git
-cd asusctl
-cargo build --release --package asusd
-sudo cp ./target/release/asusd /usr/bin/asusd
-sudo cp data/asusd.service /etc/systemd/system/
-sudo cp data/asusd.conf /etc/dbus-1/system.d/
-sudo mkdir /etc/asusd/
-sudo cp rog-aura/data/aura_support.ron /etc/asusd/
-sudo systemctl daemon-reload
-sudo systemctl enable --now asusd
-
-```
-
 ### Build dependencies
 
 ```
@@ -61,8 +39,29 @@ sudo zypper install make gcc pkg-config glib2-devel gtk3-devel libxfce4util-deve
 ### Runtime dependencies
 
 - **XFCE4 panel**
-- **[asusd](https://github.com/OpenGamingCollective/asusctl)**
 - **notify-send** (for desktop notifications)
+- **[asusd](https://github.com/OpenGamingCollective/asusctl)**
+
+#### How to install only asusd daemon
+
+for build dependencies for asusctl please check [asusctl github page](https://github.com/OpenGamingCollective/asusctl).
+
+this is optional - the only requirement is to have asusd installed in general, so you can do it in any convinient way.
+
+```
+git clone https://github.com/OpenGamingCollective/asusctl.git
+cd asusctl
+cargo build --release --package asusd
+sudo cp ./target/release/asusd /usr/bin/asusd
+sudo cp data/asusd.service /etc/systemd/system/
+sudo cp data/asusd.conf /etc/dbus-1/system.d/
+sudo mkdir /etc/asusd/
+sudo cp rog-aura/data/aura_support.ron /etc/asusd/
+sudo systemctl daemon-reload
+sudo systemctl enable --now asusd
+
+```
+
 
 # Installation
 you can do just "sudo make install" to install compiled version without having to install all build dependencies (you still need to install package "make" for it to work)
