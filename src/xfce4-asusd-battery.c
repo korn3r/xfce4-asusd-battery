@@ -632,7 +632,7 @@ static void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
     plugin->dialog_state->dirty_limit = FALSE;
 }
 
-/* Обновление UI из состояния диалога */
+/* Обновление UI из состояния диалога с учетом dirty-флагов */
 static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->dialog_state) return;
     
@@ -640,18 +640,25 @@ static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
     
     state->syncing_ui = TRUE;
     
-    if (state->check_ac) {
+    /* AC enabled - только если не dirty */
+    if (state->check_ac && !state->dirty_ac_enabled) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_ac), 
                                      plugin->auto_switch_ac_enabled);
     }
-    if (state->check_battery) {
+    
+    /* Battery enabled - только если не dirty */
+    if (state->check_battery && !state->dirty_battery_enabled) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_battery), 
                                      plugin->auto_switch_battery_enabled);
     }
-    if (state->limit_check) {
+    
+    /* Limit - только если не dirty */
+    if (state->limit_check && !state->dirty_limit) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->limit_check), 
                                      plugin->battery_limit_enabled);
     }
+    
+    /* Hide icon и hide text - всегда обновляем, они не участвуют в dirty-системе */
     if (state->hide_icon_check) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->hide_icon_check), 
                                      plugin->hide_icon);
@@ -665,7 +672,8 @@ static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
                                      plugin->hide_notifications);
     }
     
-    if (state->combo_ac) {
+    /* AC profile combobox - только если не dirty */
+    if (state->combo_ac && !state->dirty_ac_profile) {
         GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
         if (model && plugin->auto_switch_ac_profile) {
             GtkTreeIter iter;
@@ -690,7 +698,8 @@ static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
         }
     }
     
-    if (state->combo_battery) {
+    /* Battery profile combobox - только если не dirty */
+    if (state->combo_battery && !state->dirty_battery_profile) {
         GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
         if (model && plugin->auto_switch_battery_profile) {
             GtkTreeIter iter;
@@ -769,6 +778,7 @@ static void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean
         g_debug("settings_dialog_sync_from_asusd: Some reads failed, using cached values");
         g_free(ac_profile);
         g_free(battery_profile);
+        /* Используем cached значения через settings_dialog_update_ui, которая учитывает dirty-флаги */
         settings_dialog_update_ui(plugin);
         return;
     }
