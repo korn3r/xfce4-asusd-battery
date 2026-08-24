@@ -64,7 +64,7 @@ sudo systemctl enable --now asusd
 
 
 # Installation
-you can do just "sudo make install" to install compiled version without having to install all build dependencies (you still need to install package "make" for it to work)
+you can do just "sudo make install" to install compiled version without having to install all build dependencies (you still need to install package "make" for it to work).  
 please note precompiled .so has x86-64 arch.
 
 or compile yourself:
