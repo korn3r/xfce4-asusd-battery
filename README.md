@@ -1,3 +1,6 @@
+# WIP
+Work in progress - code is not in good shape yet.
+
 # xfce4-asusd-battery
 
 XFCE panel plugin for managing laptop power profiles [asusd](https://github.com/OpenGamingCollective/asusctl).
