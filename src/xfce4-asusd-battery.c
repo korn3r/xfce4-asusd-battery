@@ -39,6 +39,33 @@ typedef struct {
     guint32 enum_value;
 } ProfileSettings;
 
+/* Структура состояния диалога настроек с dirty-флагами */
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *check_ac;
+    GtkWidget *check_battery;
+    GtkWidget *combo_ac;
+    GtkWidget *combo_battery;
+    GtkWidget *limit_check;
+    GtkWidget *hide_icon_check;
+    GtkWidget *hide_text_check;
+    GtkWidget *notifications_check;
+    
+    /* Dirty-флаги для каждого UI control */
+    gboolean dirty_ac_enabled;
+    gboolean dirty_battery_enabled;
+    gboolean dirty_ac_profile;
+    gboolean dirty_battery_profile;
+    gboolean dirty_limit;
+    
+    /* Значения из UI при открытии */
+    gboolean ui_ac_enabled;
+    gboolean ui_battery_enabled;
+    gchar *ui_ac_profile;
+    gchar *ui_battery_profile;
+    gboolean ui_limit_enabled;
+} SettingsDialogState;
+
 typedef struct {
     XfcePanelPlugin *plugin;
     GtkWidget *button;
@@ -54,9 +81,9 @@ typedef struct {
     /* Настройки отображения */
     gboolean hide_icon;
     gboolean hide_text;
-    gboolean hide_notifications;  /* TRUE = уведомления скрыты (галочка включена) */
+    gboolean hide_notifications;
     
-    /* Настройки ASUSD */
+    /* Настройки ASUSD - последнее известное корректное состояние */
     gboolean battery_limit_enabled;
     gboolean auto_switch_ac_enabled;
     gboolean auto_switch_battery_enabled;
@@ -82,6 +109,9 @@ typedef struct {
     /* Флаги для диалога настроек */
     gboolean settings_dialog_open;
     gboolean saving_settings;
+    
+    /* Состояние диалога настроек */
+    SettingsDialogState *dialog_state;
 } AsusdBatteryPlugin;
 
 /* Прототипы */
@@ -110,6 +140,9 @@ static void on_dbus_signal(GDBusConnection *connection, const gchar *sender_name
                            gpointer user_data);
 static void create_about_dialog(AsusdBatteryPlugin *plugin);
 static void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog);
+static void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_dirty);
+static void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin);
+static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin);
 
 /* ASUSD прототипы */
 static gboolean asusd_init(AsusdBatteryPlugin *plugin);
@@ -140,10 +173,8 @@ static void reset_state(AsusdBatteryPlugin *plugin) {
     g_free(plugin->current_profile);
     plugin->current_profile = g_strdup("unknown");
     
-    plugin->battery_limit_enabled = FALSE;
-    plugin->auto_switch_ac_enabled = FALSE;
-    plugin->auto_switch_battery_enabled = FALSE;
-    plugin->current_battery_limit = 0;
+    /* НЕ обнуляем last known valid settings при потере ASUSD */
+    /* plugin->battery_limit_enabled, plugin->auto_switch_ac_enabled и т.д. сохраняются */
     
     update_profile_display(plugin, FALSE);
 }
@@ -257,7 +288,7 @@ XFCE_PANEL_PLUGIN_REGISTER(asusd_battery_plugin_construct)
 
 /* ========== ASUSD Функции ========== */
 
-/* Универсальная функция установки свойства - без проверки AVAILABLE */
+/* Универсальная функция установки свойства */
 static gboolean asusd_set_property(AsusdBatteryPlugin *plugin, const char *property, GVariant *value) {
     if (!plugin || !plugin->dbus_connection || !property || !value) return FALSE;
 
@@ -286,7 +317,7 @@ static gboolean asusd_set_property(AsusdBatteryPlugin *plugin, const char *prope
     return TRUE;
 }
 
-/* Helper для получения свойства типа boolean - без проверки AVAILABLE */
+/* Helper для получения свойства типа boolean */
 static gboolean asusd_get_bool_property(AsusdBatteryPlugin *plugin, const char *property, gboolean *value) {
     if (!plugin || !plugin->dbus_connection || !property || !value) return FALSE;
 
@@ -334,7 +365,7 @@ static gboolean asusd_get_bool_property(AsusdBatteryPlugin *plugin, const char *
     return TRUE;
 }
 
-/* Helper для получения свойства типа uint32 - без проверки AVAILABLE */
+/* Helper для получения свойства типа uint32 */
 static gboolean asusd_get_uint32_property(AsusdBatteryPlugin *plugin, const char *property, guint32 *value) {
     if (!plugin || !plugin->dbus_connection || !property || !value) return FALSE;
 
@@ -387,7 +418,7 @@ static gboolean asusd_get_uint32_property(AsusdBatteryPlugin *plugin, const char
     return TRUE;
 }
 
-/* Helper для получения свойства типа byte - без проверки AVAILABLE */
+/* Helper для получения свойства типа byte */
 static gboolean asusd_get_byte_property(AsusdBatteryPlugin *plugin, const char *property, guint8 *value) {
     if (!plugin || !plugin->dbus_connection || !property || !value) return FALSE;
 
@@ -435,7 +466,7 @@ static gboolean asusd_get_byte_property(AsusdBatteryPlugin *plugin, const char *
     return TRUE;
 }
 
-/* Загрузка поддерживаемых профилей - без проверки AVAILABLE */
+/* Загрузка поддерживаемых профилей */
 static gboolean asusd_load_supported_profiles(AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->dbus_connection) return FALSE;
 
@@ -539,7 +570,7 @@ static gboolean asusd_load_supported_profiles(AsusdBatteryPlugin *plugin) {
     return (plugin->profiles && plugin->profiles->len > 0);
 }
 
-/* Получение текущего профиля (только для инициализации) - без проверки AVAILABLE */
+/* Получение текущего профиля (только для инициализации) */
 static gboolean asusd_get_current_profile_static(AsusdBatteryPlugin *plugin, gchar **profile_name) {
     if (!plugin || !plugin->dbus_connection || !profile_name) return FALSE;
 
@@ -554,7 +585,7 @@ static gboolean asusd_get_current_profile_static(AsusdBatteryPlugin *plugin, gch
     return TRUE;
 }
 
-/* Установка профиля - С проверкой AVAILABLE (пользовательская операция) */
+/* Установка профиля - с проверкой AVAILABLE (пользовательская операция) */
 static gboolean asusd_set_profile(AsusdBatteryPlugin *plugin, const gchar *profile_name) {
     if (!plugin || !profile_name) return FALSE;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return FALSE;
@@ -593,13 +624,248 @@ static gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
     return (gchar**)g_ptr_array_free(result, FALSE);
 }
 
-/* Обработка изменения свойств ASUSD - БЕЗ saving_settings guard */
+/* ========== Функции управления диалогом настроек ========== */
+
+/* Сброс всех dirty-флагов */
+static void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
+    if (!plugin || !plugin->dialog_state) return;
+    
+    plugin->dialog_state->dirty_ac_enabled = FALSE;
+    plugin->dialog_state->dirty_battery_enabled = FALSE;
+    plugin->dialog_state->dirty_ac_profile = FALSE;
+    plugin->dialog_state->dirty_battery_profile = FALSE;
+    plugin->dialog_state->dirty_limit = FALSE;
+}
+
+/* Обновление UI из состояния диалога */
+static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
+    if (!plugin || !plugin->dialog_state) return;
+    
+    SettingsDialogState *state = plugin->dialog_state;
+    
+    /* Обновляем UI, если виджеты существуют */
+    if (state->check_ac) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_ac), 
+                                     plugin->auto_switch_ac_enabled);
+    }
+    if (state->check_battery) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_battery), 
+                                     plugin->auto_switch_battery_enabled);
+    }
+    if (state->limit_check) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->limit_check), 
+                                     plugin->battery_limit_enabled);
+    }
+    if (state->hide_icon_check) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->hide_icon_check), 
+                                     plugin->hide_icon);
+    }
+    if (state->hide_text_check) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->hide_text_check), 
+                                     plugin->hide_text);
+    }
+    if (state->notifications_check) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->notifications_check), 
+                                     plugin->hide_notifications);
+    }
+    
+    /* Обновляем ComboBox для AC профиля */
+    if (state->combo_ac) {
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
+        if (model && plugin->auto_switch_ac_profile) {
+            GtkTreeIter iter;
+            gboolean found = FALSE;
+            gchar *profile_name = NULL;
+            gint index = 0;
+            if (gtk_tree_model_get_iter_first(model, &iter)) {
+                do {
+                    gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                    if (g_strcmp0(profile_name, plugin->auto_switch_ac_profile) == 0) {
+                        found = TRUE;
+                        break;
+                    }
+                    g_free(profile_name);
+                    index++;
+                } while (gtk_tree_model_iter_next(model, &iter));
+                g_free(profile_name);
+            }
+            if (found) {
+                gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_ac), index);
+            }
+        }
+    }
+    
+    /* Обновляем ComboBox для Battery профиля */
+    if (state->combo_battery) {
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
+        if (model && plugin->auto_switch_battery_profile) {
+            GtkTreeIter iter;
+            gboolean found = FALSE;
+            gchar *profile_name = NULL;
+            gint index = 0;
+            if (gtk_tree_model_get_iter_first(model, &iter)) {
+                do {
+                    gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                    if (g_strcmp0(profile_name, plugin->auto_switch_battery_profile) == 0) {
+                        found = TRUE;
+                        break;
+                    }
+                    g_free(profile_name);
+                    index++;
+                } while (gtk_tree_model_iter_next(model, &iter));
+                g_free(profile_name);
+            }
+            if (found) {
+                gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_battery), index);
+            }
+        }
+    }
+}
+
+/* Синхронизация диалога с ASUSD (сохраняя dirty-флаги) */
+static void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_dirty) {
+    if (!plugin || !plugin->dialog_state) return;
+    
+    SettingsDialogState *state = plugin->dialog_state;
+    gboolean ac_enabled, battery_enabled;
+    guint32 enum_val_ac, enum_val_bat;
+    guint8 limit;
+    gchar *ac_profile = NULL, *battery_profile = NULL;
+    gboolean read_ok = TRUE;
+    
+    if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
+        g_debug("settings_dialog_sync_from_asusd: ASUSD not available, using cached values");
+        settings_dialog_update_ui(plugin);
+        return;
+    }
+    
+    /* Читаем актуальные значения из ASUSD */
+    if (!asusd_get_bool_property(plugin, "ChangePlatformProfileOnAc", &ac_enabled)) {
+        g_warning("settings_dialog_sync_from_asusd: Failed to read ChangePlatformProfileOnAc");
+        read_ok = FALSE;
+    }
+    
+    if (!asusd_get_bool_property(plugin, "ChangePlatformProfileOnBattery", &battery_enabled)) {
+        g_warning("settings_dialog_sync_from_asusd: Failed to read ChangePlatformProfileOnBattery");
+        read_ok = FALSE;
+    }
+    
+    if (!asusd_get_uint32_property(plugin, "PlatformProfileOnAc", &enum_val_ac)) {
+        g_warning("settings_dialog_sync_from_asusd: Failed to read PlatformProfileOnAc");
+        read_ok = FALSE;
+    } else {
+        ac_profile = g_strdup(profile_name_from_enum(plugin, enum_val_ac));
+    }
+    
+    if (!asusd_get_uint32_property(plugin, "PlatformProfileOnBattery", &enum_val_bat)) {
+        g_warning("settings_dialog_sync_from_asusd: Failed to read PlatformProfileOnBattery");
+        read_ok = FALSE;
+    } else {
+        battery_profile = g_strdup(profile_name_from_enum(plugin, enum_val_bat));
+    }
+    
+    if (!asusd_get_byte_property(plugin, "ChargeControlEndThreshold", &limit)) {
+        g_warning("settings_dialog_sync_from_asusd: Failed to read ChargeControlEndThreshold");
+        read_ok = FALSE;
+    }
+    
+    if (!read_ok) {
+        /* Если чтение не удалось, используем кэшированные значения */
+        g_debug("settings_dialog_sync_from_asusd: Some reads failed, using cached values");
+        g_free(ac_profile);
+        g_free(battery_profile);
+        settings_dialog_update_ui(plugin);
+        return;
+    }
+    
+    /* Обновляем кэш плагина */
+    plugin->auto_switch_ac_enabled = ac_enabled;
+    plugin->auto_switch_battery_enabled = battery_enabled;
+    plugin->battery_limit_enabled = (limit == 80);
+    plugin->current_battery_limit = limit;
+    
+    if (ac_profile) {
+        g_free(plugin->auto_switch_ac_profile);
+        plugin->auto_switch_ac_profile = ac_profile;
+    }
+    if (battery_profile) {
+        g_free(plugin->auto_switch_battery_profile);
+        plugin->auto_switch_battery_profile = battery_profile;
+    }
+    
+    /* Обновляем UI, учитывая dirty-флаги */
+    if (!keep_dirty || !state->dirty_ac_enabled) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_ac), ac_enabled);
+    }
+    if (!keep_dirty || !state->dirty_battery_enabled) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->check_battery), battery_enabled);
+    }
+    if (!keep_dirty || !state->dirty_limit) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->limit_check), (limit == 80));
+    }
+    
+    if (!keep_dirty || !state->dirty_ac_profile) {
+        if (ac_profile && state->combo_ac) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
+            if (model) {
+                GtkTreeIter iter;
+                gboolean found = FALSE;
+                gchar *profile_name = NULL;
+                gint index = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                        if (g_strcmp0(profile_name, ac_profile) == 0) {
+                            found = TRUE;
+                            break;
+                        }
+                        g_free(profile_name);
+                        index++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                    g_free(profile_name);
+                }
+                if (found) {
+                    gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_ac), index);
+                }
+            }
+        }
+    }
+    
+    if (!keep_dirty || !state->dirty_battery_profile) {
+        if (battery_profile && state->combo_battery) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
+            if (model) {
+                GtkTreeIter iter;
+                gboolean found = FALSE;
+                gchar *profile_name = NULL;
+                gint index = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                        if (g_strcmp0(profile_name, battery_profile) == 0) {
+                            found = TRUE;
+                            break;
+                        }
+                        g_free(profile_name);
+                        index++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                    g_free(profile_name);
+                }
+                if (found) {
+                    gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_battery), index);
+                }
+            }
+        }
+    }
+}
+
+/* Обработка изменения свойств ASUSD */
 static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant *changed_properties) {
     if (!plugin || !changed_properties) return;
 
-    /* saving_settings не блокирует D-Bus синхронизацию */
+    /* saving_settings НЕ блокирует D-Bus синхронизацию */
 
-    /* PlatformProfile - обновляем состояние, даже если значение не изменилось */
+    /* PlatformProfile */
     GVariant *profile_variant = g_variant_lookup_value(changed_properties, 
                                                       "PlatformProfile", 
                                                       G_VARIANT_TYPE_UINT32);
@@ -645,21 +911,40 @@ static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant
         }
     }
 
-    /* Auto-switch настройки */
+    /* Auto-switch настройки - обновляем runtime state, но UI может оставаться */
     GVariant *ac_enabled = g_variant_lookup_value(changed_properties, 
                                                  "ChangePlatformProfileOnAc", 
                                                  G_VARIANT_TYPE_BOOLEAN);
     if (ac_enabled) {
-        g_variant_get(ac_enabled, "b", &plugin->auto_switch_ac_enabled);
+        gboolean new_ac_enabled;
+        g_variant_get(ac_enabled, "b", &new_ac_enabled);
         g_variant_unref(ac_enabled);
+        
+        plugin->auto_switch_ac_enabled = new_ac_enabled;
+        
+        /* Обновляем UI только если нет dirty */
+        if (plugin->dialog_state && plugin->dialog_state->check_ac && 
+            !plugin->dialog_state->dirty_ac_enabled) {
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_ac), 
+                                         new_ac_enabled);
+        }
     }
 
     GVariant *bat_enabled = g_variant_lookup_value(changed_properties, 
                                                   "ChangePlatformProfileOnBattery", 
                                                   G_VARIANT_TYPE_BOOLEAN);
     if (bat_enabled) {
-        g_variant_get(bat_enabled, "b", &plugin->auto_switch_battery_enabled);
+        gboolean new_bat_enabled;
+        g_variant_get(bat_enabled, "b", &new_bat_enabled);
         g_variant_unref(bat_enabled);
+        
+        plugin->auto_switch_battery_enabled = new_bat_enabled;
+        
+        if (plugin->dialog_state && plugin->dialog_state->check_battery && 
+            !plugin->dialog_state->dirty_battery_enabled) {
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_battery), 
+                                         new_bat_enabled);
+        }
     }
 
     GVariant *ac_profile = g_variant_lookup_value(changed_properties, 
@@ -673,6 +958,33 @@ static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant
         const gchar *name = profile_name_from_enum(plugin, enum_val);
         g_free(plugin->auto_switch_ac_profile);
         plugin->auto_switch_ac_profile = g_strdup(name);
+        
+        /* Обновляем ComboBox только если нет dirty */
+        if (plugin->dialog_state && plugin->dialog_state->combo_ac && 
+            !plugin->dialog_state->dirty_ac_profile) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_ac));
+            if (model) {
+                GtkTreeIter iter;
+                gboolean found = FALSE;
+                gchar *profile_name = NULL;
+                gint index = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                        if (g_strcmp0(profile_name, name) == 0) {
+                            found = TRUE;
+                            break;
+                        }
+                        g_free(profile_name);
+                        index++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                    g_free(profile_name);
+                }
+                if (found) {
+                    gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_ac), index);
+                }
+            }
+        }
     }
 
     GVariant *bat_profile = g_variant_lookup_value(changed_properties, 
@@ -686,6 +998,33 @@ static void asusd_handle_properties_changed(AsusdBatteryPlugin *plugin, GVariant
         const gchar *name = profile_name_from_enum(plugin, enum_val);
         g_free(plugin->auto_switch_battery_profile);
         plugin->auto_switch_battery_profile = g_strdup(name);
+        
+        /* Обновляем ComboBox только если нет dirty */
+        if (plugin->dialog_state && plugin->dialog_state->combo_battery && 
+            !plugin->dialog_state->dirty_battery_profile) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_battery));
+            if (model) {
+                GtkTreeIter iter;
+                gboolean found = FALSE;
+                gchar *profile_name = NULL;
+                gint index = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                        if (g_strcmp0(profile_name, name) == 0) {
+                            found = TRUE;
+                            break;
+                        }
+                        g_free(profile_name);
+                        index++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                    g_free(profile_name);
+                }
+                if (found) {
+                    gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_battery), index);
+                }
+            }
+        }
     }
 }
 
@@ -800,13 +1139,11 @@ static gboolean asusd_setup_monitoring(AsusdBatteryPlugin *plugin) {
 static gboolean asusd_init(AsusdBatteryPlugin *plugin) {
     if (!plugin) return FALSE;
 
-    /* 1. Устанавливаем подписки */
     if (!asusd_setup_monitoring(plugin)) {
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         return FALSE;
     }
 
-    /* 2. Проверяем, что asusd владеет well-known name */
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_sync(
         plugin->dbus_connection,
@@ -837,7 +1174,6 @@ static gboolean asusd_init(AsusdBatteryPlugin *plugin) {
     g_debug("ASUSD: found service owner %s", owner ? owner : "<none>");
     g_free(owner);
 
-    /* 3. Синхронизируем состояние */
     plugin->asusd_state = ASUSD_STATE_CONNECTING;
 
     if (!asusd_load_supported_profiles(plugin)) {
@@ -927,6 +1263,7 @@ static void asusd_cleanup(AsusdBatteryPlugin *plugin) {
         plugin->dbus_connection = NULL;
     }
 
+    /* НЕ обнуляем last known valid settings при очистке */
     plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
 }
 
@@ -966,6 +1303,7 @@ static void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     plugin_data->last_notification_time = 0;
     plugin_data->settings_dialog_open = FALSE;
     plugin_data->saving_settings = FALSE;
+    plugin_data->dialog_state = NULL;
 
     load_settings(plugin_data);
 
@@ -1011,6 +1349,13 @@ static void asusd_battery_plugin_free(gpointer user_data) {
     if (!plugin) return;
 
     asusd_cleanup(plugin);
+
+    if (plugin->dialog_state) {
+        g_free(plugin->dialog_state->ui_ac_profile);
+        g_free(plugin->dialog_state->ui_battery_profile);
+        g_free(plugin->dialog_state);
+        plugin->dialog_state = NULL;
+    }
 
     g_free(plugin->current_profile);
     g_free(plugin->auto_switch_ac_profile);
@@ -1119,7 +1464,7 @@ static void setup_upower_monitoring(AsusdBatteryPlugin *plugin) {
     }
 }
 
-/* D-Bus сигналы - правильная сигнатура gpointer user_data */
+/* D-Bus сигналы */
 static void on_dbus_signal(GDBusConnection *connection, const gchar *sender_name,
                            const gchar *object_path, const gchar *interface_name,
                            const gchar *signal_name, GVariant *parameters,
@@ -1470,6 +1815,14 @@ static void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
         plugin->settings_dialog_open = FALSE;
         plugin->saving_settings = FALSE;
     }
+    
+    /* Очищаем состояние диалога при закрытии */
+    if (plugin->dialog_state) {
+        /* Сбрасываем dirty-флаги при закрытии без Apply */
+        settings_dialog_reset_dirty(plugin);
+        /* Синхронизируем UI с актуальным состоянием */
+        settings_dialog_sync_from_asusd(plugin, FALSE);
+    }
 }
 
 static void create_about_dialog(AsusdBatteryPlugin *plugin) {
@@ -1537,8 +1890,29 @@ static void on_close_button_clicked(GtkButton *button, GtkWidget *dialog) {
 
 /* Обработчик изменения любого элемента в диалоге (кроме Hide icon/text) */
 static void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
-    if (!plugin) return;
+    if (!plugin || !plugin->dialog_state) return;
+    
     g_debug("on_any_setting_changed: setting changed");
+    
+    /* Определяем, какой control был изменен, и устанавливаем соответствующий dirty-флаг */
+    SettingsDialogState *state = plugin->dialog_state;
+    
+    if (widget == state->check_ac) {
+        state->dirty_ac_enabled = TRUE;
+        g_debug("  dirty_ac_enabled = TRUE");
+    } else if (widget == state->check_battery) {
+        state->dirty_battery_enabled = TRUE;
+        g_debug("  dirty_battery_enabled = TRUE");
+    } else if (widget == state->combo_ac) {
+        state->dirty_ac_profile = TRUE;
+        g_debug("  dirty_ac_profile = TRUE");
+    } else if (widget == state->combo_battery) {
+        state->dirty_battery_profile = TRUE;
+        g_debug("  dirty_battery_profile = TRUE");
+    } else if (widget == state->limit_check) {
+        state->dirty_limit = TRUE;
+        g_debug("  dirty_limit = TRUE");
+    }
 }
 
 /* Обработчик для Hide icon и Hide text - правильная логика взаимоисключения */
@@ -1574,21 +1948,15 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(button)));
     if (!dialog) return;
     
-    GtkWidget *check_ac = g_object_get_data(G_OBJECT(dialog), "check_ac");
-    GtkWidget *check_battery = g_object_get_data(G_OBJECT(dialog), "check_battery");
-    GtkWidget *combo_ac = g_object_get_data(G_OBJECT(dialog), "combo_ac");
-    GtkWidget *combo_battery = g_object_get_data(G_OBJECT(dialog), "combo_battery");
-    GtkWidget *limit_check = g_object_get_data(G_OBJECT(dialog), "limit_check");
-    GtkWidget *hide_icon_check = g_object_get_data(G_OBJECT(dialog), "hide_icon_check");
-    GtkWidget *hide_text_check = g_object_get_data(G_OBJECT(dialog), "hide_text_check");
-    GtkWidget *notifications_check = g_object_get_data(G_OBJECT(dialog), "notifications_check");
+    SettingsDialogState *state = plugin->dialog_state;
+    if (!state) return;
     
     /* ============================================================
      * ЛОКАЛЬНЫЕ НАСТРОЙКИ (применяются всегда)
      * ============================================================ */
-    gboolean new_hide_icon = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(hide_icon_check));
-    gboolean new_hide_text = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(hide_text_check));
-    gboolean new_hide_notifications = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(notifications_check));
+    gboolean new_hide_icon = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->hide_icon_check));
+    gboolean new_hide_text = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->hide_text_check));
+    gboolean new_hide_notifications = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->notifications_check));
     
     gboolean hide_changed = FALSE;
     if (new_hide_icon != plugin->hide_icon) {
@@ -1621,7 +1989,6 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     gchar *current_battery_profile = NULL;
     guint8 current_limit = 0;
     
-    /* Проверяем доступность ASUSD */
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         g_debug("  ASUSD not available, cannot apply settings");
         if (!plugin->hide_notifications) {
@@ -1713,33 +2080,33 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     g_debug("    PlatformProfileOnBattery = %s", current_battery_profile ? current_battery_profile : "NULL");
     g_debug("    ChargeControlEndThreshold = %d", current_limit);
     
-    /* Получаем значения из диалога */
-    gboolean new_ac_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(check_ac));
-    gboolean new_battery_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(check_battery));
-    gboolean new_limit_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(limit_check));
+    /* Получаем значения из UI */
+    gboolean new_ac_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_ac));
+    gboolean new_battery_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_battery));
+    gboolean new_limit_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->limit_check));
     
     gchar *new_ac_profile = NULL;
     gchar *new_battery_profile = NULL;
     
     GtkTreeIter iter;
-    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(combo_ac), &iter)) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(combo_ac));
+    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_ac), &iter)) {
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
         gtk_tree_model_get(model, &iter, 0, &new_ac_profile, -1);
     }
     
-    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(combo_battery), &iter)) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(combo_battery));
+    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_battery), &iter)) {
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
         gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
     }
     
-    g_debug("  Dialog values:");
+    g_debug("  UI values:");
     g_debug("    ChangePlatformProfileOnAc = %d", new_ac_enabled);
     g_debug("    ChangePlatformProfileOnBattery = %d", new_battery_enabled);
     g_debug("    PlatformProfileOnAc = %s", new_ac_profile ? new_ac_profile : "NULL");
     g_debug("    PlatformProfileOnBattery = %s", new_battery_profile ? new_battery_profile : "NULL");
     g_debug("    ChargeControlEndThreshold (enabled) = %d", new_limit_enabled);
     
-    /* Проверяем изменения */
+    /* Проверяем изменения между UI и текущим ASUSD */
     gboolean has_changes = FALSE;
     
     if (new_ac_enabled != current_ac_enabled) {
@@ -1771,6 +2138,8 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (!has_changes) {
         g_debug("  No ASUSD changes detected");
         save_settings(plugin);
+        /* Сбрасываем dirty-флаги, так как изменений нет */
+        settings_dialog_reset_dirty(plugin);
         if (!plugin->hide_notifications) {
             send_notification(_("No changes"),
                              _("Settings are already up to date"),
@@ -1811,7 +2180,6 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     
     if (new_ac_profile && g_strcmp0(new_ac_profile, current_ac_profile) != 0) {
         guint32 enum_val = 999;
-        /* Проверяем результат profile_enum_from_name */
         if (!profile_enum_from_name(plugin, new_ac_profile, &enum_val) || enum_val == 999) {
             g_warning("  Failed to find enum for profile: %s", new_ac_profile);
             set_failed = TRUE;
@@ -1827,7 +2195,6 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     
     if (new_battery_profile && g_strcmp0(new_battery_profile, current_battery_profile) != 0) {
         guint32 enum_val = 999;
-        /* Проверяем результат profile_enum_from_name */
         if (!profile_enum_from_name(plugin, new_battery_profile, &enum_val) || enum_val == 999) {
             g_warning("  Failed to find enum for profile: %s", new_battery_profile);
             set_failed = TRUE;
@@ -1847,7 +2214,6 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
             set_failed = TRUE;
         } else {
             g_debug("  Applied ChargeControlEndThreshold = %d", new_limit);
-            /* НЕ обновляем plugin->battery_limit_enabled и plugin->current_battery_limit здесь */
         }
     }
     
@@ -1861,6 +2227,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                              _("Some settings could not be applied. Please check ASUSD status."),
                              TRUE, "emblem-readonly");
         }
+        /* Не сбрасываем dirty-флаги при ошибке */
         g_free(current_ac_profile);
         g_free(current_battery_profile);
         g_free(new_ac_profile);
@@ -1879,9 +2246,11 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         g_free(plugin->auto_switch_battery_profile);
         plugin->auto_switch_battery_profile = g_strdup(new_battery_profile);
     }
-    /* Обновляем battery limit только после успешного применения */
     plugin->battery_limit_enabled = new_limit_enabled;
     plugin->current_battery_limit = new_limit;
+    
+    /* Сбрасываем dirty-флаги после успешного Apply */
+    settings_dialog_reset_dirty(plugin);
     
     save_settings(plugin);
     g_debug("  Changes applied successfully");
@@ -2073,39 +2442,16 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     
     plugin->settings_dialog_open = TRUE;
     plugin->saving_settings = FALSE;
-
-    if (plugin->asusd_state == ASUSD_STATE_AVAILABLE) {
-        g_debug("  Reading current settings from ASUSD...");
-        
-        guint8 limit;
-        if (asusd_get_byte_property(plugin, "ChargeControlEndThreshold", &limit)) {
-            plugin->current_battery_limit = limit;
-            plugin->battery_limit_enabled = (limit == 80);
-            g_debug("  battery_limit = %d, enabled = %d", limit, plugin->battery_limit_enabled);
-        }
-        
-        asusd_get_bool_property(plugin, "ChangePlatformProfileOnAc", &plugin->auto_switch_ac_enabled);
-        asusd_get_bool_property(plugin, "ChangePlatformProfileOnBattery", &plugin->auto_switch_battery_enabled);
-        g_debug("  auto_switch_ac = %d, auto_switch_battery = %d", 
-                plugin->auto_switch_ac_enabled, plugin->auto_switch_battery_enabled);
-        
-        guint32 enum_val;
-        if (asusd_get_uint32_property(plugin, "PlatformProfileOnAc", &enum_val)) {
-            const gchar *name = profile_name_from_enum(plugin, enum_val);
-            g_free(plugin->auto_switch_ac_profile);
-            plugin->auto_switch_ac_profile = g_strdup(name);
-            g_debug("  auto_switch_ac_profile = %s", plugin->auto_switch_ac_profile);
-        }
-        
-        if (asusd_get_uint32_property(plugin, "PlatformProfileOnBattery", &enum_val)) {
-            const gchar *name = profile_name_from_enum(plugin, enum_val);
-            g_free(plugin->auto_switch_battery_profile);
-            plugin->auto_switch_battery_profile = g_strdup(name);
-            g_debug("  auto_switch_battery_profile = %s", plugin->auto_switch_battery_profile);
-        }
-    } else {
-        g_debug("  ASUSD not available, using cached settings");
+    
+    /* Создаем состояние диалога */
+    if (!plugin->dialog_state) {
+        plugin->dialog_state = g_new0(SettingsDialogState, 1);
     }
+    SettingsDialogState *state = plugin->dialog_state;
+    settings_dialog_reset_dirty(plugin);
+
+    /* Синхронизируем с ASUSD при открытии */
+    settings_dialog_sync_from_asusd(plugin, FALSE);
 
     dialog = gtk_dialog_new_with_buttons(_("Power Profile Settings"),
                                         GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(plugin->plugin))),
@@ -2118,6 +2464,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
         return;
     }
 
+    state->dialog = dialog;
     g_object_set_data(G_OBJECT(dialog), "plugin", plugin);
 
     gtk_window_set_icon_name(GTK_WINDOW(dialog), "emblem-system");
@@ -2169,6 +2516,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         gtk_widget_set_sensitive(check_ac, FALSE);
     }
+    state->check_ac = check_ac;
     g_object_set_data(G_OBJECT(dialog), "check_ac", check_ac);
     gtk_box_pack_start(GTK_BOX(hbox_ac), check_ac, FALSE, FALSE, 0);
     g_signal_connect(G_OBJECT(check_ac), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
@@ -2197,6 +2545,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     }
     gtk_widget_set_sensitive(combo_ac, plugin->auto_switch_ac_enabled && 
                                    plugin->asusd_state == ASUSD_STATE_AVAILABLE);
+    state->combo_ac = combo_ac;
     g_object_set_data(G_OBJECT(dialog), "combo_ac", combo_ac);
     gtk_box_pack_start(GTK_BOX(hbox_ac), combo_ac, FALSE, FALSE, 0);
     g_signal_connect(G_OBJECT(combo_ac), "changed", G_CALLBACK(on_any_setting_changed), plugin);
@@ -2216,6 +2565,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         gtk_widget_set_sensitive(check_battery, FALSE);
     }
+    state->check_battery = check_battery;
     g_object_set_data(G_OBJECT(dialog), "check_battery", check_battery);
     gtk_box_pack_start(GTK_BOX(hbox_battery), check_battery, FALSE, FALSE, 0);
     g_signal_connect(G_OBJECT(check_battery), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
@@ -2244,6 +2594,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     }
     gtk_widget_set_sensitive(combo_battery, plugin->auto_switch_battery_enabled && 
                                    plugin->asusd_state == ASUSD_STATE_AVAILABLE);
+    state->combo_battery = combo_battery;
     g_object_set_data(G_OBJECT(dialog), "combo_battery", combo_battery);
     gtk_box_pack_start(GTK_BOX(hbox_battery), combo_battery, FALSE, FALSE, 0);
     g_signal_connect(G_OBJECT(combo_battery), "changed", G_CALLBACK(on_any_setting_changed), plugin);
@@ -2263,6 +2614,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         gtk_widget_set_sensitive(limit_check_widget, FALSE);
     }
+    state->limit_check = limit_check_widget;
     g_object_set_data(G_OBJECT(dialog), "limit_check", limit_check_widget);
     gtk_box_pack_start(GTK_BOX(limit_vbox), limit_check_widget, FALSE, FALSE, 0);
     g_signal_connect(G_OBJECT(limit_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
@@ -2352,18 +2704,21 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     hide_icon_check_widget = gtk_check_button_new_with_label(_("Icon"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hide_icon_check_widget), plugin->hide_icon);
     gtk_box_pack_start(GTK_BOX(options_hbox), hide_icon_check_widget, FALSE, FALSE, 0);
+    state->hide_icon_check = hide_icon_check_widget;
     g_object_set_data(G_OBJECT(dialog), "hide_icon_check", hide_icon_check_widget);
     g_signal_connect(G_OBJECT(hide_icon_check_widget), "toggled", G_CALLBACK(on_hide_toggle), plugin);
 
     hide_text_check_widget = gtk_check_button_new_with_label(_("Text"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hide_text_check_widget), plugin->hide_text);
     gtk_box_pack_start(GTK_BOX(options_hbox), hide_text_check_widget, FALSE, FALSE, 0);
+    state->hide_text_check = hide_text_check_widget;
     g_object_set_data(G_OBJECT(dialog), "hide_text_check", hide_text_check_widget);
     g_signal_connect(G_OBJECT(hide_text_check_widget), "toggled", G_CALLBACK(on_hide_toggle), plugin);
 
     notifications_check_widget = gtk_check_button_new_with_label(_("Notifications"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notifications_check_widget), plugin->hide_notifications);
     gtk_box_pack_start(GTK_BOX(options_hbox), notifications_check_widget, FALSE, FALSE, 0);
+    state->notifications_check = notifications_check_widget;
     g_object_set_data(G_OBJECT(dialog), "notifications_check", notifications_check_widget);
     g_signal_connect(G_OBJECT(notifications_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
 
