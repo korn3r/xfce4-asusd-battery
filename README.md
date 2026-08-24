@@ -145,5 +145,5 @@ Authors
 - Linux kernel platform_profile interface
 - asusctl software
 
-# Donation
+## Donations
 If you would like this plugin and want to support someone, you can donate to asusctl developers. Links are on [asusctl Github page](https://github.com/OpenGamingCollective/asusctl).

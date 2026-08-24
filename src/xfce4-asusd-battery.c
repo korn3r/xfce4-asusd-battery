@@ -1613,30 +1613,105 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     }
     
     /* ============================================================
-     * НАСТРОЙКИ ASUSD
+     * НАСТРОЙКИ ASUSD - проверяем результат КАЖДОГО Get
      * ============================================================ */
     gboolean current_ac_enabled = FALSE;
     gboolean current_battery_enabled = FALSE;
     gchar *current_ac_profile = NULL;
     gchar *current_battery_profile = NULL;
     guint8 current_limit = 0;
-    gboolean asusd_available = (plugin->asusd_state == ASUSD_STATE_AVAILABLE);
     
-    if (asusd_available) {
-        asusd_get_bool_property(plugin, "ChangePlatformProfileOnAc", &current_ac_enabled);
-        asusd_get_bool_property(plugin, "ChangePlatformProfileOnBattery", &current_battery_enabled);
-        
-        guint32 enum_val;
-        if (asusd_get_uint32_property(plugin, "PlatformProfileOnAc", &enum_val)) {
-            const gchar *name = profile_name_from_enum(plugin, enum_val);
-            current_ac_profile = g_strdup(name);
+    /* Проверяем доступность ASUSD */
+    if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
+        g_debug("  ASUSD not available, cannot apply settings");
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("ASUSD is not available. Cannot apply settings."),
+                             TRUE, "emblem-readonly");
         }
-        if (asusd_get_uint32_property(plugin, "PlatformProfileOnBattery", &enum_val)) {
-            const gchar *name = profile_name_from_enum(plugin, enum_val);
-            current_battery_profile = g_strdup(name);
-        }
-        asusd_get_byte_property(plugin, "ChargeControlEndThreshold", &current_limit);
+        save_settings(plugin);
+        return;
     }
+    
+    /* Читаем ChangePlatformProfileOnAc */
+    gboolean get_ac_enabled = asusd_get_bool_property(plugin, "ChangePlatformProfileOnAc", &current_ac_enabled);
+    if (!get_ac_enabled) {
+        g_warning("  Failed to read ChangePlatformProfileOnAc");
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("Failed to read current settings from ASUSD."),
+                             TRUE, "emblem-readonly");
+        }
+        return;
+    }
+    
+    /* Читаем ChangePlatformProfileOnBattery */
+    gboolean get_battery_enabled = asusd_get_bool_property(plugin, "ChangePlatformProfileOnBattery", &current_battery_enabled);
+    if (!get_battery_enabled) {
+        g_warning("  Failed to read ChangePlatformProfileOnBattery");
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("Failed to read current settings from ASUSD."),
+                             TRUE, "emblem-readonly");
+        }
+        return;
+    }
+    
+    /* Читаем PlatformProfileOnAc */
+    guint32 enum_val_ac = 999;
+    gboolean get_ac_profile = asusd_get_uint32_property(plugin, "PlatformProfileOnAc", &enum_val_ac);
+    if (get_ac_profile) {
+        const gchar *name = profile_name_from_enum(plugin, enum_val_ac);
+        current_ac_profile = g_strdup(name);
+        g_debug("  Current PlatformProfileOnAc = %s", current_ac_profile);
+    } else {
+        g_warning("  Failed to read PlatformProfileOnAc");
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("Failed to read current settings from ASUSD."),
+                             TRUE, "emblem-readonly");
+        }
+        return;
+    }
+    
+    /* Читаем PlatformProfileOnBattery */
+    guint32 enum_val_bat = 999;
+    gboolean get_battery_profile = asusd_get_uint32_property(plugin, "PlatformProfileOnBattery", &enum_val_bat);
+    if (get_battery_profile) {
+        const gchar *name = profile_name_from_enum(plugin, enum_val_bat);
+        current_battery_profile = g_strdup(name);
+        g_debug("  Current PlatformProfileOnBattery = %s", current_battery_profile);
+    } else {
+        g_warning("  Failed to read PlatformProfileOnBattery");
+        g_free(current_ac_profile);
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("Failed to read current settings from ASUSD."),
+                             TRUE, "emblem-readonly");
+        }
+        return;
+    }
+    
+    /* Читаем ChargeControlEndThreshold */
+    gboolean get_limit = asusd_get_byte_property(plugin, "ChargeControlEndThreshold", &current_limit);
+    if (!get_limit) {
+        g_warning("  Failed to read ChargeControlEndThreshold");
+        g_free(current_ac_profile);
+        g_free(current_battery_profile);
+        if (!plugin->hide_notifications) {
+            send_notification(_("Error"),
+                             _("Failed to read current settings from ASUSD."),
+                             TRUE, "emblem-readonly");
+        }
+        return;
+    }
+    
+    g_debug("  Current ASUSD values:");
+    g_debug("    ChangePlatformProfileOnAc = %d", current_ac_enabled);
+    g_debug("    ChangePlatformProfileOnBattery = %d", current_battery_enabled);
+    g_debug("    PlatformProfileOnAc = %s", current_ac_profile ? current_ac_profile : "NULL");
+    g_debug("    PlatformProfileOnBattery = %s", current_battery_profile ? current_battery_profile : "NULL");
+    g_debug("    ChargeControlEndThreshold = %d", current_limit);
     
     /* Получаем значения из диалога */
     gboolean new_ac_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(check_ac));
@@ -1657,20 +1732,12 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
     }
     
-    if (!asusd_available) {
-        g_debug("  ASUSD not available, cannot apply settings");
-        if (!plugin->hide_notifications) {
-            send_notification(_("Error"),
-                             _("ASUSD is not available. Cannot apply settings."),
-                             TRUE, "emblem-readonly");
-        }
-        save_settings(plugin);
-        g_free(current_ac_profile);
-        g_free(current_battery_profile);
-        g_free(new_ac_profile);
-        g_free(new_battery_profile);
-        return;
-    }
+    g_debug("  Dialog values:");
+    g_debug("    ChangePlatformProfileOnAc = %d", new_ac_enabled);
+    g_debug("    ChangePlatformProfileOnBattery = %d", new_battery_enabled);
+    g_debug("    PlatformProfileOnAc = %s", new_ac_profile ? new_ac_profile : "NULL");
+    g_debug("    PlatformProfileOnBattery = %s", new_battery_profile ? new_battery_profile : "NULL");
+    g_debug("    ChargeControlEndThreshold (enabled) = %d", new_limit_enabled);
     
     /* Проверяем изменения */
     gboolean has_changes = FALSE;
@@ -1744,7 +1811,11 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     
     if (new_ac_profile && g_strcmp0(new_ac_profile, current_ac_profile) != 0) {
         guint32 enum_val = 999;
-        if (profile_enum_from_name(plugin, new_ac_profile, &enum_val) && enum_val != 999) {
+        /* Проверяем результат profile_enum_from_name */
+        if (!profile_enum_from_name(plugin, new_ac_profile, &enum_val) || enum_val == 999) {
+            g_warning("  Failed to find enum for profile: %s", new_ac_profile);
+            set_failed = TRUE;
+        } else {
             if (!asusd_set_property(plugin, "PlatformProfileOnAc", g_variant_new_uint32(enum_val))) {
                 g_warning("  Failed to set PlatformProfileOnAc");
                 set_failed = TRUE;
@@ -1756,7 +1827,11 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     
     if (new_battery_profile && g_strcmp0(new_battery_profile, current_battery_profile) != 0) {
         guint32 enum_val = 999;
-        if (profile_enum_from_name(plugin, new_battery_profile, &enum_val) && enum_val != 999) {
+        /* Проверяем результат profile_enum_from_name */
+        if (!profile_enum_from_name(plugin, new_battery_profile, &enum_val) || enum_val == 999) {
+            g_warning("  Failed to find enum for profile: %s", new_battery_profile);
+            set_failed = TRUE;
+        } else {
             if (!asusd_set_property(plugin, "PlatformProfileOnBattery", g_variant_new_uint32(enum_val))) {
                 g_warning("  Failed to set PlatformProfileOnBattery");
                 set_failed = TRUE;
