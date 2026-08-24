@@ -1829,7 +1829,7 @@ static void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
         plugin->saving_settings = FALSE;
     }
     
-    /* Освобождаем состояние диалога */
+    /* Освобождаем состояние диалога и обнуляем указатель */
     if (plugin->dialog_state) {
         g_free(plugin->dialog_state);
         plugin->dialog_state = NULL;
@@ -1899,6 +1899,12 @@ static void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin
     
     /* Если идет программная синхронизация UI - игнорируем */
     if (plugin->dialog_state->syncing_ui) {
+        return;
+    }
+    
+    /* Проверяем, что диалог все еще открыт */
+    if (!plugin->settings_dialog_open) {
+        g_debug("on_any_setting_changed: dialog is closed, ignoring");
         return;
     }
     
@@ -2459,6 +2465,7 @@ static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     /* Создаем состояние диалога */
     if (plugin->dialog_state) {
         g_free(plugin->dialog_state);
+        plugin->dialog_state = NULL;
     }
     plugin->dialog_state = g_new0(SettingsDialogState, 1);
     SettingsDialogState *state = plugin->dialog_state;
