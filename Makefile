@@ -154,7 +154,6 @@ install: all
 	@echo "  xfce4-asusd-battery installed successfully!"
 	@echo "  Plugin installed to: $(PLUGIN_DIR)/$(TARGET)"
 	@echo "  Desktop file installed to: $(DESKTOP_DIR)/$(PLUGIN_NAME).desktop"
-	@echo "  SELinux: $(if $(filter yes,$(SELINUX_ENABLED)),Enabled,Disabled)"
 	@echo "============================================================"
 	@echo ""
 	@echo "Restart panel with: xfce4-panel -r"
