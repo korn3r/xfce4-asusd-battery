@@ -1,20 +1,23 @@
+# ============================================================================
+# xfce4-asusd-battery - Makefile
+# ============================================================================
+
 CC = gcc
 PKG_DEPS = glib-2.0 gtk+-3.0 libxfce4panel-2.0 libxfce4util-1.0 libxfconf-0 gio-2.0
-CFLAGS = -Wall -O2 -fPIC -DLOCALEDIR=\"/usr/share/locale\" `pkg-config --cflags $(PKG_DEPS)`
+CFLAGS = -Wall -O2 -fPIC `pkg-config --cflags $(PKG_DEPS)` \
+         -DLOCALEDIR=\"/usr/share/locale\" \
+         -DGETTEXT_PACKAGE=\"xfce4-asusd-battery\" \
+         -Iinclude
 LDFLAGS = -shared `pkg-config --libs $(PKG_DEPS)`
 TARGET = libxfce4_asusd_battery.so
-DEBUG_TARGET = xfce4-asusd-battery-debug
 PLUGIN_NAME = xfce4-asusd-battery
-SOURCES = src/$(PLUGIN_NAME).c
+SOURCES = src/main.c src/utils.c src/profile-manager.c src/asusd-client.c src/settings-dialog.c
 
 # ========== Определение дистрибутива и путей ==========
 DISTRO := $(shell grep -oP '^ID=\K\w+' /etc/os-release 2>/dev/null || echo "unknown")
 ARCH := $(shell uname -m)
-
-# Определяем мультиархитектурную папку для Debian/Ubuntu
 DEB_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null)
 
-# Устанавливаем пути в зависимости от дистрибутива
 DESKTOP_DIR = /usr/share/xfce4/panel/plugins
 ifeq ($(filter debian ubuntu,$(DISTRO)),$(DISTRO))
     ifneq ($(DEB_MULTIARCH),)
@@ -25,7 +28,6 @@ ifeq ($(filter debian ubuntu,$(DISTRO)),$(DISTRO))
 else ifeq ($(DISTRO), arch)
     PLUGIN_DIR = /usr/lib/xfce4/panel/plugins
 else
-    # Fallback для других дистрибутивов
     ifeq ($(ARCH), x86_64)
         PLUGIN_DIR = /usr/lib64/xfce4/panel/plugins
     else
@@ -33,11 +35,8 @@ else
     endif
 endif
 
-# Пути для локалей
 LOCALE_DIR = /usr/share/locale
-
-# ========== Список языков для перевода ==========
-LANGUAGES = ru de fr zh_CN es it pl hi fa ar be fi da sv nb sr ko mi ms vi ja
+LANGUAGES = ru
 
 # ========== Проверка SELinux ==========
 SELINUX_ENABLED := $(shell command -v getenforce >/dev/null 2>&1 && getenforce 2>/dev/null | grep -q "Enforcing\|Permissive" && echo "yes" || echo "no")
@@ -49,23 +48,24 @@ HAVE_MSGFMT := $(shell command -v msgfmt >/dev/null 2>&1 && echo "yes" || echo "
 MO_FILES_EXIST := $(shell find locale -name "*.mo" 2>/dev/null | head -1)
 MO_EXISTS := $(if $(MO_FILES_EXIST),yes,no)
 
-# ========== Проверка необходимости пересборки переводов ==========
-NEED_REBUILD := no
-ifneq ($(MO_EXISTS), yes)
-    NEED_REBUILD := yes
-endif
-
-# ========== Цели сборки ==========
+# ========== Цели ==========
 all: $(TARGET) translations
 
-$(TARGET): $(SOURCES)
-	mkdir -p src
+$(TARGET): $(SOURCES) | include
+	@echo "Building $(TARGET)..."
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $(TARGET) $(SOURCES)
+	@echo "Build complete: $(TARGET)"
 
 debug: $(SOURCES)
 	$(CC) -Wall -O0 -g `pkg-config --cflags $(PKG_DEPS)` \
+		-DLOCALEDIR=\"/usr/share/locale\" \
+		-DGETTEXT_PACKAGE=\"xfce4-asusd-battery\" \
+		-Iinclude \
 		`pkg-config --libs $(PKG_DEPS)` \
-		-o $(DEBUG_TARGET) $(SOURCES)
+		-o $(PLUGIN_NAME)-debug $(SOURCES)
+
+include:
+	mkdir -p include
 
 # ========== Сборка переводов ==========
 translations:
@@ -88,30 +88,17 @@ translations:
 		done; \
 	fi
 
-# ========== Принудительная сборка переводов ==========
-force-translations:
-	@echo "Forcing translation build..."
-	@if [ "$(HAVE_MSGFMT)" != "yes" ]; then \
-		echo "msgfmt not found, cannot build translations (install gettext)"; \
-		exit 1; \
-	fi
-	@mkdir -p locale
-	@for lang in $(LANGUAGES); do \
-		if [ -f "po/$$lang.po" ]; then \
-			mkdir -p "locale/$$lang/LC_MESSAGES"; \
-			msgfmt -o "locale/$$lang/LC_MESSAGES/$(PLUGIN_NAME).mo" "po/$$lang.po" 2>/dev/null && echo "  $$lang done" || echo "  $$lang failed"; \
-		else \
-			echo "  $$lang skipped (po/$$lang.po not found)"; \
-		fi; \
-	done
-
 # ========== Установка ==========
 install: all
 	@echo "Installing plugin..."
 	mkdir -p $(DESTDIR)$(PLUGIN_DIR)
 	mkdir -p $(DESTDIR)$(DESKTOP_DIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(PLUGIN_DIR)/
-	install -m 644 $(PLUGIN_NAME).desktop $(DESTDIR)$(DESKTOP_DIR)/
+	@if [ -f $(PLUGIN_NAME).desktop ]; then \
+		install -m 644 $(PLUGIN_NAME).desktop $(DESTDIR)$(DESKTOP_DIR)/; \
+	else \
+		echo "  Warning: $(PLUGIN_NAME).desktop not found"; \
+	fi
 	@if [ -d locale ] && [ -n "$(LANGUAGES)" ]; then \
 		echo "Installing translations..."; \
 		for lang_dir in locale/*; do \
@@ -158,27 +145,6 @@ install: all
 	@echo ""
 	@echo "Restart panel with: xfce4-panel -r"
 
-# ========== Установка переводов без сборки ==========
-install-translations:
-	@echo "Installing translations only..."
-	@if [ -d locale ] && [ -n "$(LANGUAGES)" ]; then \
-		for lang_dir in locale/*; do \
-			if [ -d "$$lang_dir" ]; then \
-				lang=$$(basename "$$lang_dir"); \
-				target_mo="$(DESTDIR)$(LOCALE_DIR)/$$lang/LC_MESSAGES/$(PLUGIN_NAME).mo"; \
-				source_mo="locale/$$lang/LC_MESSAGES/$(PLUGIN_NAME).mo"; \
-				if [ -f "$$source_mo" ]; then \
-					mkdir -p $(DESTDIR)$(LOCALE_DIR)/$$lang/LC_MESSAGES; \
-					install -m 644 "$$source_mo" "$$target_mo"; \
-					echo "  $$lang installed"; \
-				fi; \
-			fi; \
-		done; \
-	else \
-		echo "  No translations found in locale/ directory"; \
-		echo "  Run 'make translations' or 'make force-translations' first"; \
-	fi
-
 # ========== Удаление ==========
 uninstall:
 	@echo "Uninstalling plugin from system..."
@@ -203,8 +169,9 @@ uninstall:
 
 # ========== Очистка ==========
 clean:
-	rm -f $(TARGET) $(DEBUG_TARGET)
+	rm -f $(TARGET) $(PLUGIN_NAME)-debug
 	rm -rf locale
+	@echo "Clean complete"
 
 # ========== Информация ==========
 info:
@@ -221,76 +188,15 @@ info:
 	@echo "  Languages: $(LANGUAGES)"
 	@echo "============================================================"
 
-# ========== Проверка зависимостей ==========
-check:
-	@echo "Checking dependencies..."
-	@for pkg in $(PKG_DEPS); do \
-		if pkg-config --exists $$pkg 2>/dev/null; then \
-			echo "  ✓ $$pkg"; \
-		else \
-			echo "  ✗ $$pkg - NOT FOUND"; \
-		fi; \
-	done
-	@echo ""
-	@echo "Checking SELinux..."
-	@if [ "$(SELINUX_ENABLED)" = "yes" ]; then \
-		echo "  ✓ SELinux is enabled"; \
-	else \
-		echo "  ✗ SELinux is disabled or not found"; \
-	fi
-	@echo ""
-	@echo "Checking msgfmt..."
-	@if [ "$(HAVE_MSGFMT)" = "yes" ]; then \
-		echo "  ✓ msgfmt is available"; \
-	else \
-		echo "  ✗ msgfmt is not available (install gettext)"; \
-	fi
-	@echo ""
-	@echo "Checking translations in locale directory..."
-	@if [ -d locale ]; then \
-		find locale -name "*.mo" 2>/dev/null | head -10 || echo "  No .mo files found"; \
-	else \
-		echo "  locale/ directory does not exist"; \
-	fi
-	@echo ""
-	@echo "Checking source .po files..."
-	@if [ -z "$(LANGUAGES)" ]; then \
-		echo "  No languages configured"; \
-	else \
-		for lang in $(LANGUAGES); do \
-			if [ -f "po/$$lang.po" ]; then \
-				echo "  ✓ $$lang"; \
-			else \
-				echo "  ✗ $$lang - NOT FOUND"; \
-			fi; \
-		done; \
-	fi
-
 # ========== Помощь ==========
 help:
 	@echo "Available targets:"
-	@echo "  all                  - Build plugin and translations"
-	@echo "  install              - Install plugin and translations"
-	@echo "  install-translations - Install only translations (from locale/ directory)"
-	@echo "  uninstall            - Uninstall plugin"
-	@echo "  clean                - Remove built files (including locale/ directory)"
-	@echo "  debug                - Build with debug symbols"
-	@echo "  translations         - Build translations (checks if already built)"
-	@echo "  force-translations   - Force rebuild translations"
-	@echo "  info                 - Show build information"
-	@echo "  check                - Check dependencies"
-	@echo "  help                 - Show this help"
-	@echo ""
-	@echo "Variables:"
-	@echo "  LANGUAGES            - Space-separated list of languages (e.g. 'ru de fr')"
-	@echo "  DESTDIR              - Installation prefix (e.g. DESTDIR=/tmp/test)"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make                           - Build with all languages"
-	@echo "  make LANGUAGES=\"ru de\"         - Build with Russian and German only"
-	@echo "  make LANGUAGES=\"\"              - Build without translations"
-	@echo "  make force-translations        - Force rebuild all translations"
-	@echo "  sudo make install              - Install plugin"
-	@echo "  sudo make install-translations - Install translations from locale/ directory"
+	@echo "  make         - Build plugin and translations"
+	@echo "  make install - Install plugin and translations (sudo)"
+	@echo "  make uninstall - Uninstall plugin (sudo)"
+	@echo "  make clean   - Remove built files"
+	@echo "  make debug   - Build with debug symbols"
+	@echo "  make info    - Show build information"
+	@echo "  make help    - Show this help"
 
-.PHONY: all install install-translations uninstall clean debug translations force-translations info check help
+.PHONY: all install uninstall clean debug info help

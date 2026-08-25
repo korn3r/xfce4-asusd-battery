@@ -1,0 +1,95 @@
+# ============================================================================
+# xfce4-asusd-battery - .gitignore
+# ============================================================================
+
+# Autotools (если используете)
+Makefile.in
+autom4te.cache
+/aclocal.m4
+/compile
+/config.cache
+/config.guess
+/config.h.in
+/config.log
+/config.status
+/config.sub
+/configure
+/depcomp
+/install-sh
+/libtool
+/ltmain.sh
+/missing
+/stamp-h1
+.deps/
+.libs/
+/build-aux/
+/m4/
+
+# Объектные файлы
+*.o
+*.lo
+*.la
+*.a
+*.so.*
+*-debug
+
+# Скомпилированные переводы
+/locale/
+*.gmo
+*.mo
+
+# Autotools временные
+*.log
+*.tmp
+*.cache
+
+# Файлы IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# Системные
+.DS_Store
+Thumbs.db
+
+# Временные файлы перевода
+po/*.po~
+po/*.gmo~
+
+# Локальные настройки
+*.local
+*.user
+
+# Файлы пакетов
+*.deb
+*.rpm
+*.tar.gz
+
+# Файлы покрытия кода
+*.gcda
+*.gcno
+
+# ============================================================================
+# НЕ ИГНОРИРУЕМ (должны быть в Git)
+# ============================================================================
+
+# Исходные файлы
+!*.c
+!*.h
+
+# Makefile (ваш простой Makefile) - НЕ игнорируем
+!Makefile
+
+# Autotools исходники
+!Makefile.am
+!configure.ac
+!autogen.sh
+
+# Desktop файл
+!*.desktop
+
+# Собранная библиотека - НЕ игнорируем (нужна для установки без пересборки)
+!libxfce4_asusd_battery.so

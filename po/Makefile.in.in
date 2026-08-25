@@ -1,0 +1,129 @@
+# po/Makefile.in.in
+# Makefile for PO directory
+
+PACKAGE = @PACKAGE@
+VERSION = @VERSION@
+
+SHELL = /bin/sh
+@SET_MAKE@
+
+srcdir = @srcdir@
+top_srcdir = @top_srcdir@
+VPATH = @srcdir@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+localedir = $(datarootdir)/locale
+gettextsrcdir = $(datadir)/gettext/po
+
+INSTALL = @INSTALL@
+INSTALL_DATA = @INSTALL_DATA@
+
+# We use $(mkdir_p).
+# In automake <= 1.9.x, $(mkdir_p) is defined by "mkdir -p".
+# In automake 1.10a, $(mkdir_p) is defined by $(MKDIR_P).
+# We need to define it for older automake versions.
+mkdir_p = @mkdir_p@
+
+GMSGFMT = @GMSGFMT@
+MSGFMT = @MSGFMT@
+XGETTEXT = @XGETTEXT@
+MSGMERGE = msgmerge
+MSGMERGE_UPDATE = @MSGMERGE@ --update
+MSGINIT = msginit
+MSGCONV = msgconv
+MSGFILTER = msgfilter
+
+POFILES = @POFILES@
+GMOFILES = @GMOFILES@
+UPDATEPOFILES = @UPDATEPOFILES@
+DUMMYPOFILES = @DUMMYPOFILES@
+DISTFILES.common = Makefile.in.in POTFILES.in \
+$(srcdir)/POTFILES \
+$(srcdir)/LINGUAS
+DISTFILES = $(DISTFILES.common) $(POFILES) $(GMOFILES) \
+$(srcdir)/stamp-po
+
+POTFILES = 
+
+CATALOGS = @CATALOGS@
+
+all: all-@USE_NLS@
+
+all-yes: stamp-po
+all-no:
+
+# stamp-po is a timestamp denoting the last time any catalog was updated.
+stamp-po: $(srcdir)/$(PACKAGE).pot
+	test -z "$(GMOFILES)" || $(MAKE) $(GMOFILES)
+	@echo "touch stamp-po"
+	@echo timestamp > stamp-po.tmp
+	@mv stamp-po.tmp stamp-po
+
+# This target rebuilds $(srcdir)/$(PACKAGE).pot from POTFILES.in.
+$(srcdir)/$(PACKAGE).pot: $(POTFILES)
+	$(XGETTEXT) --default-domain=$(PACKAGE) --directory=$(top_srcdir) \
+	  --add-comments --keyword=_ --keyword=N_ \
+	  --files-from=$(srcdir)/POTFILES.in \
+	  --copyright-holder="ASUS Battery Plugin Authors" \
+	  --msgid-bugs-address="https://github.com/yourusername/xfce4-asusd-battery"
+	test ! -f $(PACKAGE).po || { \
+	  if test -f $(srcdir)/$(PACKAGE).pot; then \
+	    sed -e 's/^\#\: .*//g' < $(PACKAGE).po > $(srcdir)/$(PACKAGE).pot; \
+	  else \
+	    mv $(PACKAGE).po $(srcdir)/$(PACKAGE).pot; \
+	  fi; \
+	}
+
+install-data-local: install-data-local-@USE_NLS@
+install-data-local-no: all
+install-data-local-yes: all
+	$(mkdir_p) $(DESTDIR)$(datarootdir)/locale
+	@catalogs='$(CATALOGS)'; \
+	for cat in $$catalogs; do \
+	  cat=`basename $$cat`; \
+	  lang=`echo $$cat | sed -e 's/\.gmo$$//'`; \
+	  dir=$(localedir)/$$lang/LC_MESSAGES; \
+	  $(mkdir_p) $(DESTDIR)$$dir; \
+	  if test -r $$cat; then \
+	    $(INSTALL_DATA) $$cat $(DESTDIR)$$dir/$(PACKAGE).mo; \
+	    echo "installing $$cat as $(DESTDIR)$$dir/$(PACKAGE).mo"; \
+	  else \
+	    $(INSTALL_DATA) $(srcdir)/$$cat $(DESTDIR)$$dir/$(PACKAGE).mo; \
+	    echo "installing $(srcdir)/$$cat as $(DESTDIR)$$dir/$(PACKAGE).mo"; \
+	  fi; \
+	done
+
+uninstall-local: uninstall-local-@USE_NLS@
+uninstall-local-no:
+uninstall-local-yes:
+	@catalogs='$(CATALOGS)'; \
+	for cat in $$catalogs; do \
+	  cat=`basename $$cat`; \
+	  lang=`echo $$cat | sed -e 's/\.gmo$$//'`; \
+	  rm -f $(DESTDIR)$(localedir)/$$lang/LC_MESSAGES/$(PACKAGE).mo; \
+	done
+
+clean:
+	rm -f *.gmo *.mo stamp-po
+
+distclean: clean
+	rm -f Makefile
+
+maintainer-clean: distclean
+	@echo "This command is intended for maintainers to use;"
+	@echo "it deletes files that may require special tools to rebuild."
+	rm -f $(GMOFILES)
+
+update-po: Makefile
+	$(MAKE) $(UPDATEPOFILES)
+	$(MAKE) update-gmo
+
+update-gmo: Makefile $(GMOFILES)
+	@:
+
+Makefile: Makefile.in.in $(top_builddir)/config.status
+	cd $(top_builddir) \
+	  && $(SHELL) ./config.status $(subdir)/$@.in
