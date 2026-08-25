@@ -33,10 +33,10 @@ autom4te.cache
 *.so.*
 *-debug
 
-# Скомпилированные переводы
-/locale/
-*.gmo
-*.mo
+## Скомпилированные переводы
+#/locale/
+#*.gmo
+#*.mo
 
 # Autotools временные
 *.log
