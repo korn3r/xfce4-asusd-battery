@@ -36,8 +36,13 @@ typedef struct SettingsDialogState SettingsDialogState;
 typedef struct AsyncCallContext AsyncCallContext;
 typedef struct SettingsApplyContext SettingsApplyContext;
 
-/* Структура плагина */
-typedef struct {
+/* Структура плагина как GObject */
+#define ASUSD_TYPE_BATTERY_PLUGIN (asusd_battery_plugin_get_type())
+G_DECLARE_FINAL_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, ASUSD, BATTERY_PLUGIN, GObject)
+
+struct _AsusdBatteryPlugin {
+    GObject parent_instance;
+    
     XfcePanelPlugin *plugin;
     GtkWidget *button;
     GtkWidget *box;
@@ -82,10 +87,7 @@ typedef struct {
     guint pending_calls;
     GCancellable *cancellable;
     gint init_load_state;
-    
-    /* Флаг для безопасного завершения */
-    gboolean is_destroying;
-} AsusdBatteryPlugin;
+};
 
 /* Структура профиля */
 struct ProfileSettings {
@@ -114,24 +116,23 @@ struct SettingsDialogState {
     gboolean dirty_limit;
     
     gboolean syncing_ui;
-    guint dialog_id; /* Уникальный ID для защиты от гонок */
 };
 
-/* Контекст для асинхронных операций */
+/* Контекст для асинхронных операций - использует weak ref */
 struct AsyncCallContext {
-    AsusdBatteryPlugin *plugin;
+    GWeakRef plugin_ref;      /* Слабая ссылка на плагин */
     gchar *method_name;
     GVariant *value;
     GAsyncReadyCallback callback;
     gpointer user_data;
     GDestroyNotify destroy_notify;
     gint ref_count;
-    guint dialog_id; /* Для защиты от гонок диалогов */
+    guint dialog_id;
 };
 
-/* Контекст для применения настроек */
+/* Контекст для применения настроек - использует weak ref */
 struct SettingsApplyContext {
-    AsusdBatteryPlugin *plugin;
+    GWeakRef plugin_ref;      /* Слабая ссылка на плагин */
     gboolean new_ac_enabled;
     gboolean new_battery_enabled;
     gchar *new_ac_profile;
@@ -143,12 +144,11 @@ struct SettingsApplyContext {
     gboolean has_errors;
     gchar **error_messages;
     gint error_count;
-    guint apply_id; /* Для защиты от гонок */
+    guint apply_id;
 };
 
 /* Прототипы */
 static void asusd_battery_plugin_construct(XfcePanelPlugin *plugin);
-static void asusd_battery_plugin_free(gpointer user_data);
 static void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify);
 static void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin);
 static gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin);
@@ -229,7 +229,109 @@ static void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer use
 static void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data);
 
+/* ========== GObject определения ========== */
+
+G_DEFINE_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, G_TYPE_OBJECT)
+
+static void async_call_context_free(AsyncCallContext *ctx);
+
+static void asusd_battery_plugin_dispose(GObject *object) {
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
+    
+    g_debug("AsusdBatteryPlugin: dispose");
+    
+    if (plugin->cancellable) {
+        g_cancellable_cancel(plugin->cancellable);
+        g_clear_object(&plugin->cancellable);
+    }
+    
+    if (plugin->connection) {
+        g_clear_object(&plugin->connection);
+    }
+    if (plugin->asusd_proxy) {
+        g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin);
+        g_clear_object(&plugin->asusd_proxy);
+    }
+    if (plugin->upower_proxy) {
+        g_signal_handlers_disconnect_by_data(plugin->upower_proxy, plugin);
+        g_clear_object(&plugin->upower_proxy);
+    }
+    
+    if (plugin->operation_queue) {
+        g_queue_free_full(plugin->operation_queue, (GDestroyNotify)async_call_context_free);
+        plugin->operation_queue = NULL;
+    }
+    
+    if (plugin->asusd_retry_timeout_id > 0) {
+        g_source_remove(plugin->asusd_retry_timeout_id);
+        plugin->asusd_retry_timeout_id = 0;
+    }
+    
+    G_OBJECT_CLASS(asusd_battery_plugin_parent_class)->dispose(object);
+}
+
+static void asusd_battery_plugin_finalize(GObject *object) {
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
+    
+    g_debug("AsusdBatteryPlugin: finalize");
+    
+    g_free(plugin->current_profile);
+    g_free(plugin->auto_switch_ac_profile);
+    g_free(plugin->auto_switch_battery_profile);
+    g_free(plugin->last_displayed_profile);
+    
+    if (plugin->profiles) {
+        g_ptr_array_free(plugin->profiles, TRUE);
+        plugin->profiles = NULL;
+    }
+    if (plugin->profile_lookup) {
+        g_hash_table_destroy(plugin->profile_lookup);
+        plugin->profile_lookup = NULL;
+    }
+    if (plugin->dialog_state) {
+        g_free(plugin->dialog_state);
+        plugin->dialog_state = NULL;
+    }
+    
+    G_OBJECT_CLASS(asusd_battery_plugin_parent_class)->finalize(object);
+}
+
+static void asusd_battery_plugin_class_init(AsusdBatteryPluginClass *klass) {
+    GObjectClass *object_class = G_OBJECT_CLASS(klass);
+    object_class->dispose = asusd_battery_plugin_dispose;
+    object_class->finalize = asusd_battery_plugin_finalize;
+}
+
+static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
+    plugin->current_profile = g_strdup("balanced");
+    plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
+    plugin->hide_icon = FALSE;
+    plugin->hide_text = FALSE;
+    plugin->hide_notifications = FALSE;
+    plugin->is_on_ac = TRUE;
+    plugin->last_notification_time = 0;
+    plugin->settings_dialog_open = FALSE;
+    plugin->saving_settings = FALSE;
+    plugin->dialog_state = NULL;
+    plugin->asusd_proxy = NULL;
+    plugin->upower_proxy = NULL;
+    plugin->connection = NULL;
+    plugin->asusd_init_retry_count = 0;
+    plugin->init_load_state = 0;
+    plugin->pending_calls = 0;
+    plugin->processing_ops = FALSE;
+    plugin->cancellable = g_cancellable_new();
+    plugin->operation_queue = g_queue_new();
+}
+
 /* ========== Вспомогательные функции ========== */
+
+static AsusdBatteryPlugin* get_plugin_safe(gpointer user_data) {
+    if (!user_data) return NULL;
+    if (!G_IS_OBJECT(user_data)) return NULL;
+    if (!ASUSD_IS_BATTERY_PLUGIN(user_data)) return NULL;
+    return ASUSD_BATTERY_PLUGIN(user_data);
+}
 
 static const gchar* get_profile_icon(AsusdBatteryPlugin *plugin, const gchar *profile) {
     if (!plugin || !profile) return "battery-good-symbolic";
@@ -369,9 +471,8 @@ static gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
 }
 
 static void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     
-    /* Проверяем, есть ли уже профили */
     if (plugin->profiles && plugin->profiles->len > 0) {
         g_debug("ASUSD: Profiles already exist (%d), not creating fallback", plugin->profiles->len);
         return;
@@ -379,7 +480,6 @@ static void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
     
     g_debug("ASUSD: Creating fallback profiles");
     
-    /* Очищаем старые данные */
     if (plugin->profiles) {
         g_ptr_array_free(plugin->profiles, TRUE);
         plugin->profiles = NULL;
@@ -425,7 +525,7 @@ static void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
 }
 
 static void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
-    if (!plugin || !value || plugin->is_destroying) return;
+    if (!plugin || !value) return;
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
     GVariantIter iter;
     guint32 enum_value;
@@ -460,7 +560,7 @@ static AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
                                                 gpointer user_data,
                                                 GDestroyNotify destroy_notify) {
     AsyncCallContext *ctx = g_new0(AsyncCallContext, 1);
-    ctx->plugin = plugin;
+    g_weak_ref_init(&ctx->plugin_ref, G_OBJECT(plugin));
     ctx->method_name = g_strdup(method_name);
     if (value) ctx->value = g_variant_ref(value);
     ctx->callback = callback;
@@ -474,6 +574,7 @@ static AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
 static void async_call_context_free(AsyncCallContext *ctx) {
     if (!ctx) return;
     if (g_atomic_int_dec_and_test(&ctx->ref_count)) {
+        g_weak_ref_clear(&ctx->plugin_ref);
         g_free(ctx->method_name);
         if (ctx->value) g_variant_unref(ctx->value);
         if (ctx->destroy_notify && ctx->user_data) ctx->destroy_notify(ctx->user_data);
@@ -481,17 +582,28 @@ static void async_call_context_free(AsyncCallContext *ctx) {
     }
 }
 
+static AsusdBatteryPlugin* async_call_context_get_plugin(AsyncCallContext *ctx) {
+    if (!ctx) return NULL;
+    GObject *obj = g_weak_ref_get(&ctx->plugin_ref);
+    if (!obj) return NULL;
+    if (!ASUSD_IS_BATTERY_PLUGIN(obj)) {
+        g_object_unref(obj);
+        return NULL;
+    }
+    return ASUSD_BATTERY_PLUGIN(obj);
+}
+
 static void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
                                   GVariant *parameters, GAsyncReadyCallback callback,
                                   gpointer user_data) {
-    if (!plugin || !method || plugin->is_destroying) return;
+    if (!plugin) return;
     AsyncCallContext *ctx = async_call_context_new(plugin, method, parameters, callback, user_data, NULL);
     g_queue_push_tail(plugin->operation_queue, ctx);
     if (!plugin->processing_ops) process_next_operation(plugin);
 }
 
 static void process_next_operation(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     if (g_queue_is_empty(plugin->operation_queue)) { plugin->processing_ops = FALSE; return; }
     if (!plugin->asusd_proxy) { g_debug("ASUSD: Proxy not available"); plugin->processing_ops = FALSE; return; }
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
@@ -531,10 +643,8 @@ static void on_property_set_done(GObject *source, GAsyncResult *res, gpointer us
     AsyncCallContext *ctx = (AsyncCallContext*)user_data;
     if (!ctx) return;
     
-    AsusdBatteryPlugin *plugin = ctx->plugin;
-    
-    /* Проверяем, жив ли еще плагин */
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = async_call_context_get_plugin(ctx);
+    if (!plugin) {
         g_debug("ASUSD: Plugin destroyed, discarding callback");
         async_call_context_free(ctx);
         return;
@@ -561,6 +671,7 @@ static void on_property_set_done(GObject *source, GAsyncResult *res, gpointer us
         if (result) g_variant_unref(result);
     }
     
+    g_object_unref(plugin);
     async_call_context_free(ctx);
     process_next_operation(plugin);
 }
@@ -568,7 +679,7 @@ static void on_property_set_done(GObject *source, GAsyncResult *res, gpointer us
 static void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
                              GVariant *parameters, GAsyncReadyCallback callback,
                              gpointer user_data) {
-    if (!plugin || !method || plugin->is_destroying) return;
+    if (!plugin) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         g_debug("ASUSD: Call %s queued (state=%d)", method, plugin->asusd_state);
     }
@@ -579,7 +690,7 @@ static void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
 
 static void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
                                      GAsyncReadyCallback callback, gpointer user_data) {
-    if (!plugin || !property || plugin->is_destroying) return;
+    if (!plugin || !property) return;
     g_debug("ASUSD: Getting property: %s", property);
     
     if (!plugin->connection) {
@@ -607,7 +718,7 @@ static void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *pro
 static void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *property,
                                      GVariant *value, GAsyncReadyCallback callback,
                                      gpointer user_data) {
-    if (!plugin || !property || !value || plugin->is_destroying) return;
+    if (!plugin || !property || !value) return;
     if (!plugin->connection) {
         g_warning("ASUSD: No connection available");
         return;
@@ -632,7 +743,7 @@ static void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *pro
 
 static void asusd_set_profile_async(AsusdBatteryPlugin *plugin, const gchar *profile_name,
                                     GAsyncReadyCallback callback, gpointer user_data) {
-    if (!plugin || !profile_name || plugin->is_destroying) return;
+    if (!plugin || !profile_name) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
     guint32 enum_val = 999;
     if (!profile_enum_from_name(plugin, profile_name, &enum_val)) {
@@ -645,7 +756,7 @@ static void asusd_set_profile_async(AsusdBatteryPlugin *plugin, const gchar *pro
 /* ========== Создание прокси ========== */
 
 static void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     g_debug("ASUSD: Creating proxy asynchronously");
     
     g_dbus_proxy_new_for_bus(
@@ -662,8 +773,11 @@ static void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
 }
 
 static void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding proxy callback");
+        return;
+    }
     
     GError *error = NULL;
     plugin->asusd_proxy = g_dbus_proxy_new_for_bus_finish(res, &error);
@@ -673,11 +787,13 @@ static void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer 
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         if (plugin->asusd_retry_timeout_id == 0)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(5, asusd_retry_init, plugin);
+        g_object_unref(plugin);
         return;
     }
     if (!plugin->asusd_proxy) {
         g_warning("ASUSD: Proxy creation returned NULL");
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
+        g_object_unref(plugin);
         return;
     }
     
@@ -706,10 +822,12 @@ static void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer 
         if (plugin->asusd_retry_timeout_id == 0)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(2, asusd_retry_init, plugin);
     }
+    
+    g_object_unref(plugin);
 }
 
 static void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     g_debug("UPower: Creating proxy asynchronously");
     g_dbus_proxy_new_for_bus(
         G_BUS_TYPE_SYSTEM,
@@ -725,19 +843,25 @@ static void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
 }
 
 static void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("UPower: Plugin destroyed, discarding proxy callback");
+        return;
+    }
     
     GError *error = NULL;
     plugin->upower_proxy = g_dbus_proxy_new_for_bus_finish(res, &error);
     if (error) {
         g_warning("UPower: Failed to create proxy: %s", error->message);
         g_error_free(error);
+        g_object_unref(plugin);
         return;
     }
     g_debug("UPower: Proxy created successfully");
     g_signal_connect(plugin->upower_proxy, "g-properties-changed",
                     G_CALLBACK(on_proxy_properties_changed), plugin);
+    
+    g_object_unref(plugin);
 }
 
 /* ========== Сигналы прокси ========== */
@@ -746,8 +870,9 @@ static void on_proxy_properties_changed(GDBusProxy *proxy,
                                         GVariant *changed_properties,
                                         GStrv invalidated_properties,
                                         gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin *)user_data;
-    if (!plugin || plugin->is_destroying || !changed_properties) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin || !changed_properties) return;
+    
     g_debug("=== on_proxy_properties_changed ===");
     
     if (proxy == plugin->asusd_proxy) {
@@ -861,19 +986,20 @@ static void on_proxy_properties_changed(GDBusProxy *proxy,
         }
         g_variant_dict_clear(&dict);
     }
+    
+    g_object_unref(plugin);
 }
 
 /* ========== Асинхронная инициализация ========== */
 
 static void asusd_init_async(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     g_debug("ASUSD: Initializing asynchronously...");
     if (plugin->asusd_proxy) {
         g_debug("ASUSD: Cleaning up old proxy");
         g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin);
-        g_object_unref(plugin->asusd_proxy);
-        plugin->asusd_proxy = NULL;
-        if (plugin->connection) { g_object_unref(plugin->connection); plugin->connection = NULL; }
+        g_clear_object(&plugin->asusd_proxy);
+        g_clear_object(&plugin->connection);
     }
     if (plugin->profiles) { g_ptr_array_free(plugin->profiles, TRUE); plugin->profiles = NULL; }
     if (plugin->profile_lookup) { g_hash_table_destroy(plugin->profile_lookup); plugin->profile_lookup = NULL; }
@@ -882,8 +1008,9 @@ static void asusd_init_async(AsusdBatteryPlugin *plugin) {
 }
 
 static gboolean asusd_retry_init(gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin *)user_data;
-    if (!plugin || plugin->is_destroying) return G_SOURCE_REMOVE;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) return G_SOURCE_REMOVE;
+    
     plugin->asusd_retry_timeout_id = 0;
     g_debug("ASUSD: Retry init attempt %d", plugin->asusd_init_retry_count + 1);
     plugin->asusd_init_retry_count++;
@@ -895,23 +1022,28 @@ static gboolean asusd_retry_init(gpointer user_data) {
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             asusd_get_property_async(plugin, "PlatformProfileChoices",
                                     (GAsyncReadyCallback)on_profile_choices_loaded, plugin);
+            g_object_unref(plugin);
             return G_SOURCE_REMOVE;
         }
         g_free(owner);
     }
     asusd_init_async(plugin);
+    g_object_unref(plugin);
     return G_SOURCE_REMOVE;
 }
 
 static void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding profile choices callback");
+        return;
+    }
     
     GError *error = NULL;
     
-    /* Если профили уже есть, не создаем их заново */
     if (plugin->profiles && plugin->profiles->len > 0) {
         g_debug("ASUSD: Profiles already loaded, skipping");
+        g_object_unref(plugin);
         return;
     }
     
@@ -922,6 +1054,7 @@ static void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpoint
             g_error_free(error);
             create_fallback_profiles(plugin);
             asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+            g_object_unref(plugin);
             return;
         }
         g_warning("ASUSD: Failed to get PlatformProfileChoices: %s", error->message);
@@ -929,12 +1062,14 @@ static void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpoint
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         if (plugin->asusd_retry_timeout_id == 0)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(5, asusd_retry_init, plugin);
+        g_object_unref(plugin);
         return;
     }
     if (!result) {
         g_warning("ASUSD: No result for PlatformProfileChoices");
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        g_object_unref(plugin);
         return;
     }
     
@@ -945,6 +1080,7 @@ static void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpoint
         g_warning("ASUSD: No value in PlatformProfileChoices");
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        g_object_unref(plugin);
         return;
     }
     if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
@@ -957,16 +1093,21 @@ static void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpoint
         g_variant_unref(value);
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        g_object_unref(plugin);
         return;
     }
     parse_profile_choices(plugin, value);
     g_variant_unref(value);
     asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding current profile callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -979,6 +1120,7 @@ static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpoint
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             update_profile_display(plugin, FALSE);
         }
+        g_object_unref(plugin);
         return;
     }
     if (!result) {
@@ -989,6 +1131,7 @@ static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpoint
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             update_profile_display(plugin, FALSE);
         }
+        g_object_unref(plugin);
         return;
     }
     
@@ -1003,6 +1146,7 @@ static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpoint
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             update_profile_display(plugin, FALSE);
         }
+        g_object_unref(plugin);
         return;
     }
     if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
@@ -1019,6 +1163,7 @@ static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpoint
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             update_profile_display(plugin, FALSE);
         }
+        g_object_unref(plugin);
         return;
     }
     guint32 enum_val;
@@ -1034,11 +1179,15 @@ static void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpoint
         plugin->init_load_state = 1;
         asusd_get_property_async(plugin, "ChargeControlEndThreshold", (GAsyncReadyCallback)on_limit_loaded, plugin);
     }
+    g_object_unref(plugin);
 }
 
 static void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding limit callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1066,11 +1215,15 @@ static void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_da
         }
     }
     asusd_get_property_async(plugin, "ChangePlatformProfileOnAc", (GAsyncReadyCallback)on_ac_switch_loaded, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding ac switch callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1095,11 +1248,15 @@ static void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer use
         }
     }
     asusd_get_property_async(plugin, "PlatformProfileOnAc", (GAsyncReadyCallback)on_ac_profile_loaded, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding ac profile callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1128,11 +1285,15 @@ static void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer us
         }
     }
     asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery", (GAsyncReadyCallback)on_battery_switch_loaded, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding battery switch callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1157,11 +1318,15 @@ static void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointe
         }
     }
     asusd_get_property_async(plugin, "PlatformProfileOnBattery", (GAsyncReadyCallback)on_battery_profile_loaded, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
+        g_debug("ASUSD: Plugin destroyed, discarding battery profile callback");
+        return;
+    }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1201,22 +1366,31 @@ static void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpoint
     g_debug("ASUSD: Async initialization completed");
     if (plugin->dialog_state && plugin->dialog_state->dialog)
         settings_dialog_sync_from_asusd(plugin, FALSE);
+    
+    g_object_unref(plugin);
 }
 
 /* Очистка ASUSD */
 static void asusd_cleanup(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     
-    plugin->is_destroying = TRUE;
+    g_debug("ASUSD: Cleaning up");
     
     if (plugin->cancellable) {
         g_cancellable_cancel(plugin->cancellable);
-        g_object_unref(plugin->cancellable);
-        plugin->cancellable = NULL;
+        g_clear_object(&plugin->cancellable);
     }
-    if (plugin->connection) { g_object_unref(plugin->connection); plugin->connection = NULL; }
-    if (plugin->asusd_proxy) { g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin); g_object_unref(plugin->asusd_proxy); plugin->asusd_proxy = NULL; }
-    if (plugin->upower_proxy) { g_signal_handlers_disconnect_by_data(plugin->upower_proxy, plugin); g_object_unref(plugin->upower_proxy); plugin->upower_proxy = NULL; }
+    if (plugin->connection) {
+        g_clear_object(&plugin->connection);
+    }
+    if (plugin->asusd_proxy) {
+        g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin);
+        g_clear_object(&plugin->asusd_proxy);
+    }
+    if (plugin->upower_proxy) {
+        g_signal_handlers_disconnect_by_data(plugin->upower_proxy, plugin);
+        g_clear_object(&plugin->upower_proxy);
+    }
     if (plugin->profiles) { g_ptr_array_free(plugin->profiles, TRUE); plugin->profiles = NULL; }
     if (plugin->profile_lookup) { g_hash_table_destroy(plugin->profile_lookup); plugin->profile_lookup = NULL; }
     if (plugin->operation_queue) { g_queue_free_full(plugin->operation_queue, (GDestroyNotify)async_call_context_free); plugin->operation_queue = NULL; }
@@ -1238,7 +1412,7 @@ static void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
 }
 
 static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
-    if (!plugin || !plugin->dialog_state || plugin->is_destroying) return;
+    if (!plugin || !plugin->dialog_state) return;
     SettingsDialogState *state = plugin->dialog_state;
     state->syncing_ui = TRUE;
     
@@ -1302,7 +1476,7 @@ static void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
 }
 
 static void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_dirty) {
-    if (!plugin || !plugin->dialog_state || plugin->is_destroying) return;
+    if (!plugin || !plugin->dialog_state) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         g_debug("settings_dialog_sync_from_asusd: ASUSD not available, using cached values");
         settings_dialog_update_ui(plugin);
@@ -1315,15 +1489,15 @@ static void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean
 }
 
 static void on_ac_switch_loaded_for_dialog(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
         g_debug("on_ac_switch_loaded_for_dialog: plugin destroyed");
         return;
     }
     
-    /* Проверяем, существует ли еще диалог */
     if (!plugin->dialog_state) {
         g_debug("on_ac_switch_loaded_for_dialog: dialog destroyed");
+        g_object_unref(plugin);
         return;
     }
     
@@ -1339,6 +1513,7 @@ static void on_ac_switch_loaded_for_dialog(GObject *source, GAsyncResult *res, g
         if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
         asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
                                 (GAsyncReadyCallback)on_battery_switch_loaded_for_dialog, plugin);
+        g_object_unref(plugin);
         return;
     }
     
@@ -1364,17 +1539,19 @@ static void on_ac_switch_loaded_for_dialog(GObject *source, GAsyncResult *res, g
     if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
     asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
                             (GAsyncReadyCallback)on_battery_switch_loaded_for_dialog, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_battery_switch_loaded_for_dialog(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
         g_debug("on_battery_switch_loaded_for_dialog: plugin destroyed");
         return;
     }
     
     if (!plugin->dialog_state) {
         g_debug("on_battery_switch_loaded_for_dialog: dialog destroyed");
+        g_object_unref(plugin);
         return;
     }
     
@@ -1390,6 +1567,7 @@ static void on_battery_switch_loaded_for_dialog(GObject *source, GAsyncResult *r
         if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
         asusd_get_property_async(plugin, "PlatformProfileOnAc",
                                 (GAsyncReadyCallback)on_ac_profile_loaded_for_dialog, plugin);
+        g_object_unref(plugin);
         return;
     }
     
@@ -1415,17 +1593,19 @@ static void on_battery_switch_loaded_for_dialog(GObject *source, GAsyncResult *r
     if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
     asusd_get_property_async(plugin, "PlatformProfileOnAc",
                             (GAsyncReadyCallback)on_ac_profile_loaded_for_dialog, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_ac_profile_loaded_for_dialog(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
         g_debug("on_ac_profile_loaded_for_dialog: plugin destroyed");
         return;
     }
     
     if (!plugin->dialog_state) {
         g_debug("on_ac_profile_loaded_for_dialog: dialog destroyed");
+        g_object_unref(plugin);
         return;
     }
     
@@ -1445,6 +1625,7 @@ static void on_ac_profile_loaded_for_dialog(GObject *source, GAsyncResult *res, 
         if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
         asusd_get_property_async(plugin, "PlatformProfileOnBattery",
                                 (GAsyncReadyCallback)on_battery_profile_loaded_for_dialog, plugin);
+        g_object_unref(plugin);
         return;
     }
     
@@ -1489,17 +1670,19 @@ static void on_ac_profile_loaded_for_dialog(GObject *source, GAsyncResult *res, 
     if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
     asusd_get_property_async(plugin, "PlatformProfileOnBattery",
                             (GAsyncReadyCallback)on_battery_profile_loaded_for_dialog, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_battery_profile_loaded_for_dialog(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
         g_debug("on_battery_profile_loaded_for_dialog: plugin destroyed");
         return;
     }
     
     if (!plugin->dialog_state) {
         g_debug("on_battery_profile_loaded_for_dialog: dialog destroyed");
+        g_object_unref(plugin);
         return;
     }
     
@@ -1519,6 +1702,7 @@ static void on_battery_profile_loaded_for_dialog(GObject *source, GAsyncResult *
         if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
         asusd_get_property_async(plugin, "ChargeControlEndThreshold",
                                 (GAsyncReadyCallback)on_limit_loaded_for_dialog, plugin);
+        g_object_unref(plugin);
         return;
     }
     
@@ -1563,17 +1747,19 @@ static void on_battery_profile_loaded_for_dialog(GObject *source, GAsyncResult *
     if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
     asusd_get_property_async(plugin, "ChargeControlEndThreshold",
                             (GAsyncReadyCallback)on_limit_loaded_for_dialog, plugin);
+    g_object_unref(plugin);
 }
 
 static void on_limit_loaded_for_dialog(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) {
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) {
         g_debug("on_limit_loaded_for_dialog: plugin destroyed");
         return;
     }
     
     if (!plugin->dialog_state) {
         g_debug("on_limit_loaded_for_dialog: dialog destroyed");
+        g_object_unref(plugin);
         return;
     }
     
@@ -1588,6 +1774,7 @@ static void on_limit_loaded_for_dialog(GObject *source, GAsyncResult *res, gpoin
         if (plugin->dialog_state && plugin->dialog_state->limit_check && !plugin->dialog_state->dirty_limit)
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->limit_check), FALSE);
         if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
+        g_object_unref(plugin);
         return;
     }
     
@@ -1612,6 +1799,7 @@ static void on_limit_loaded_for_dialog(GObject *source, GAsyncResult *res, gpoin
         g_variant_unref(value);
     }
     if (plugin->dialog_state) plugin->dialog_state->syncing_ui = FALSE;
+    g_object_unref(plugin);
 }
 
 /* ========== Уведомления ========== */
@@ -1671,7 +1859,7 @@ static void save_settings(AsusdBatteryPlugin *plugin) {
 /* ========== Обновление отображения ========== */
 
 static void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
         g_debug("update_profile_display: No profiles loaded, creating fallback");
@@ -1756,7 +1944,7 @@ static void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_n
 /* ========== UI Callbacks ========== */
 
 static void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
-    if (!plugin || !widget || plugin->is_destroying) return;
+    if (!plugin) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
     
     GtkWidget *menu = gtk_menu_new();
@@ -1808,7 +1996,7 @@ static void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 }
 
 static void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
-    if (!item || !plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
     gchar *profile = (gchar *)g_object_get_data(G_OBJECT(item), "profile");
     if (!profile) return;
@@ -1816,8 +2004,8 @@ static void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
 }
 
 static void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) return;
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
@@ -1826,14 +2014,16 @@ static void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer use
         if (!plugin->hide_notifications)
             send_notification(_("Error changing profile"), _("Failed to set profile via ASUSD"), TRUE, "emblem-readonly");
         g_error_free(error);
+        g_object_unref(plugin);
         return;
     }
     if (result) g_variant_unref(result);
     g_debug("Profile set successfully, waiting for property change signal");
+    g_object_unref(plugin);
 }
 
 static gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin) {
-    if (!plugin || !widget || plugin->is_destroying) return FALSE;
+    if (!plugin) return FALSE;
     if (event->button == 3) {
         GtkWidget *menu = gtk_menu_new();
         if (!menu) return FALSE;
@@ -1850,13 +2040,13 @@ static gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdB
     return FALSE;
 }
 
-static void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { if (!item || !plugin || plugin->is_destroying) return; create_settings_dialog(plugin); }
-static void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { if (!item || !plugin || plugin->is_destroying) return; create_about_dialog(plugin); }
+static void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { if (!plugin) return; create_settings_dialog(plugin); }
+static void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { if (!plugin) return; create_about_dialog(plugin); }
 
 /* ========== Диалоги ========== */
 
 static void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     if (plugin->settings_dialog_open) {
         g_debug("on_dialog_destroy: settings dialog closed");
         plugin->settings_dialog_open = FALSE;
@@ -1866,7 +2056,7 @@ static void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 }
 
 static void create_about_dialog(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     GtkWidget *dialog = gtk_dialog_new_with_buttons(_("About ASUS Battery Plugin"),
                                         GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(plugin->plugin))),
                                         GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -1903,7 +2093,7 @@ static void on_close_button_clicked(GtkButton *button, GtkWidget *dialog) {
 }
 
 static void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
-    if (!plugin || !plugin->dialog_state || plugin->is_destroying) return;
+    if (!plugin || !plugin->dialog_state) return;
     if (plugin->dialog_state->syncing_ui) return;
     if (!plugin->settings_dialog_open) { g_debug("on_any_setting_changed: dialog is closed"); return; }
     g_debug("on_any_setting_changed: setting changed");
@@ -1916,7 +2106,7 @@ static void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin
 }
 
 static void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(toggle_button)));
     if (!dialog) return;
     GtkWidget *hide_icon_check = g_object_get_data(G_OBJECT(dialog), "hide_icon_check");
@@ -1932,7 +2122,7 @@ static void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *p
 }
 
 static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
-    if (!plugin || !plugin->settings_dialog_open || plugin->is_destroying) return;
+    if (!plugin || !plugin->settings_dialog_open) return;
     g_debug("=== on_apply_clicked: Apply button clicked ===");
     GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(button)));
     if (!dialog) return;
@@ -1974,7 +2164,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     }
     
     SettingsApplyContext *ctx = g_new0(SettingsApplyContext, 1);
-    ctx->plugin = plugin;
+    g_weak_ref_init(&ctx->plugin_ref, G_OBJECT(plugin));
     ctx->new_ac_enabled = new_ac_enabled;
     ctx->new_battery_enabled = new_battery_enabled;
     ctx->new_ac_profile = g_strdup(new_ac_profile);
@@ -1999,6 +2189,7 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         settings_dialog_reset_dirty(plugin);
         if (!plugin->hide_notifications)
             send_notification(_("No changes"), _("Settings are already up to date"), FALSE, "emblem-default");
+        g_weak_ref_clear(&ctx->plugin_ref);
         g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile); g_free(ctx);
         return;
     }
@@ -2009,16 +2200,25 @@ static void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
 }
 
 static void apply_next_setting(SettingsApplyContext *ctx) {
-    if (!ctx || !ctx->plugin) return;
-    AsusdBatteryPlugin *plugin = ctx->plugin;
-    if (plugin->is_destroying) {
-        g_debug("apply_next_setting: plugin destroying, aborting");
+    if (!ctx) return;
+    
+    AsusdBatteryPlugin *plugin = NULL;
+    GObject *obj = g_weak_ref_get(&ctx->plugin_ref);
+    if (obj && ASUSD_IS_BATTERY_PLUGIN(obj)) {
+        plugin = ASUSD_BATTERY_PLUGIN(obj);
+    }
+    if (!plugin) {
+        g_debug("apply_next_setting: plugin destroyed, aborting");
+        g_clear_object(&obj);
         g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
         if (ctx->error_messages) g_strfreev(ctx->error_messages);
         g_free(ctx);
         return;
     }
+    
     if (ctx->current_step >= ctx->total_steps || ctx->has_errors) {
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         on_settings_apply_complete(ctx);
         return;
     }
@@ -2031,6 +2231,8 @@ static void apply_next_setting(SettingsApplyContext *ctx) {
         asusd_set_property_async(plugin, "ChangePlatformProfileOnAc",
                                 g_variant_new_boolean(ctx->new_ac_enabled),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         return;
     }
     if (ctx->new_ac_enabled != plugin->auto_switch_ac_enabled) applied++;
@@ -2039,6 +2241,8 @@ static void apply_next_setting(SettingsApplyContext *ctx) {
         asusd_set_property_async(plugin, "ChangePlatformProfileOnBattery",
                                 g_variant_new_boolean(ctx->new_battery_enabled),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         return;
     }
     if (ctx->new_battery_enabled != plugin->auto_switch_battery_enabled) applied++;
@@ -2049,12 +2253,16 @@ static void apply_next_setting(SettingsApplyContext *ctx) {
         if (!profile_enum_from_name(plugin, ctx->new_ac_profile, &enum_val) || enum_val == 999) {
             g_warning("  Failed to find enum for profile: %s", ctx->new_ac_profile);
             ctx->has_errors = TRUE; ctx->error_count++; ctx->current_step++;
+            g_object_unref(plugin);
+            g_clear_object(&obj);
             apply_next_setting(ctx);
             return;
         }
         asusd_set_property_async(plugin, "PlatformProfileOnAc",
                                 g_variant_new_uint32(enum_val),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         return;
     }
     if (ctx->new_ac_profile && g_strcmp0(ctx->new_ac_profile, plugin->auto_switch_ac_profile) != 0) applied++;
@@ -2065,12 +2273,16 @@ static void apply_next_setting(SettingsApplyContext *ctx) {
         if (!profile_enum_from_name(plugin, ctx->new_battery_profile, &enum_val) || enum_val == 999) {
             g_warning("  Failed to find enum for profile: %s", ctx->new_battery_profile);
             ctx->has_errors = TRUE; ctx->error_count++; ctx->current_step++;
+            g_object_unref(plugin);
+            g_clear_object(&obj);
             apply_next_setting(ctx);
             return;
         }
         asusd_set_property_async(plugin, "PlatformProfileOnBattery",
                                 g_variant_new_uint32(enum_val),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         return;
     }
     if (ctx->new_battery_profile && g_strcmp0(ctx->new_battery_profile, plugin->auto_switch_battery_profile) != 0) applied++;
@@ -2079,19 +2291,28 @@ static void apply_next_setting(SettingsApplyContext *ctx) {
         asusd_set_property_async(plugin, "ChargeControlEndThreshold",
                                 g_variant_new_byte(ctx->new_limit),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        g_clear_object(&obj);
         return;
     }
     
+    g_object_unref(plugin);
+    g_clear_object(&obj);
     on_settings_apply_complete(ctx);
 }
 
 static void on_settings_apply_step_done(GObject *source, GAsyncResult *res, gpointer user_data) {
     SettingsApplyContext *ctx = (SettingsApplyContext*)user_data;
-    if (!ctx || !ctx->plugin) return;
+    if (!ctx) return;
     
-    AsusdBatteryPlugin *plugin = ctx->plugin;
-    if (plugin->is_destroying) {
-        g_debug("on_settings_apply_step_done: plugin destroying");
+    AsusdBatteryPlugin *plugin = NULL;
+    GObject *obj = g_weak_ref_get(&ctx->plugin_ref);
+    if (obj && ASUSD_IS_BATTERY_PLUGIN(obj)) {
+        plugin = ASUSD_BATTERY_PLUGIN(obj);
+    }
+    if (!plugin) {
+        g_debug("on_settings_apply_step_done: plugin destroyed");
+        g_clear_object(&obj);
         g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
         if (ctx->error_messages) g_strfreev(ctx->error_messages);
         g_free(ctx);
@@ -2112,47 +2333,56 @@ static void on_settings_apply_step_done(GObject *source, GAsyncResult *res, gpoi
         if (result) g_variant_unref(result);
     }
     ctx->current_step++;
+    
+    g_object_unref(plugin);
+    g_clear_object(&obj);
     apply_next_setting(ctx);
 }
 
 static void on_settings_apply_complete(SettingsApplyContext *ctx) {
-    if (!ctx || !ctx->plugin) return;
-    AsusdBatteryPlugin *plugin = ctx->plugin;
-    plugin->saving_settings = FALSE;
+    if (!ctx) return;
     
-    if (plugin->is_destroying) {
-        g_debug("on_settings_apply_complete: plugin destroying");
-        g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
-        if (ctx->error_messages) g_strfreev(ctx->error_messages);
-        g_free(ctx);
-        return;
+    AsusdBatteryPlugin *plugin = NULL;
+    GObject *obj = g_weak_ref_get(&ctx->plugin_ref);
+    if (obj && ASUSD_IS_BATTERY_PLUGIN(obj)) {
+        plugin = ASUSD_BATTERY_PLUGIN(obj);
     }
     
-    if (ctx->has_errors) {
-        g_warning("  One or more settings failed to apply");
-        if (!plugin->hide_notifications) {
-            gchar *error_msg = NULL;
-            if (ctx->error_count > 0 && ctx->error_messages)
-                error_msg = g_strjoinv("\n", ctx->error_messages);
-            send_notification(_("Error applying settings"),
-                             error_msg ? error_msg : _("Some settings could not be applied."),
-                             TRUE, "emblem-readonly");
-            g_free(error_msg);
+    if (plugin) {
+        plugin->saving_settings = FALSE;
+    }
+    
+    if (plugin) {
+        if (ctx->has_errors) {
+            g_warning("  One or more settings failed to apply");
+            if (!plugin->hide_notifications) {
+                gchar *error_msg = NULL;
+                if (ctx->error_count > 0 && ctx->error_messages)
+                    error_msg = g_strjoinv("\n", ctx->error_messages);
+                send_notification(_("Error applying settings"),
+                                 error_msg ? error_msg : _("Some settings could not be applied."),
+                                 TRUE, "emblem-readonly");
+                g_free(error_msg);
+            }
+        } else {
+            plugin->auto_switch_ac_enabled = ctx->new_ac_enabled;
+            plugin->auto_switch_battery_enabled = ctx->new_battery_enabled;
+            if (ctx->new_ac_profile) { g_free(plugin->auto_switch_ac_profile); plugin->auto_switch_ac_profile = g_strdup(ctx->new_ac_profile); }
+            if (ctx->new_battery_profile) { g_free(plugin->auto_switch_battery_profile); plugin->auto_switch_battery_profile = g_strdup(ctx->new_battery_profile); }
+            plugin->battery_limit_enabled = ctx->new_limit_enabled;
+            plugin->current_battery_limit = ctx->new_limit;
+            settings_dialog_reset_dirty(plugin);
+            save_settings(plugin);
+            g_debug("  Changes applied successfully");
+            if (!plugin->hide_notifications)
+                send_notification(_("Settings applied"), _("Power profile settings have been updated"), FALSE, "emblem-system");
         }
     } else {
-        plugin->auto_switch_ac_enabled = ctx->new_ac_enabled;
-        plugin->auto_switch_battery_enabled = ctx->new_battery_enabled;
-        if (ctx->new_ac_profile) { g_free(plugin->auto_switch_ac_profile); plugin->auto_switch_ac_profile = g_strdup(ctx->new_ac_profile); }
-        if (ctx->new_battery_profile) { g_free(plugin->auto_switch_battery_profile); plugin->auto_switch_battery_profile = g_strdup(ctx->new_battery_profile); }
-        plugin->battery_limit_enabled = ctx->new_limit_enabled;
-        plugin->current_battery_limit = ctx->new_limit;
-        settings_dialog_reset_dirty(plugin);
-        save_settings(plugin);
-        g_debug("  Changes applied successfully");
-        if (!plugin->hide_notifications)
-            send_notification(_("Settings applied"), _("Power profile settings have been updated"), FALSE, "emblem-system");
+        g_debug("on_settings_apply_complete: plugin destroyed, skipping UI updates");
     }
     
+    if (obj) g_clear_object(&obj);
+    g_weak_ref_clear(&ctx->plugin_ref);
     g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
     if (ctx->error_messages) g_strfreev(ctx->error_messages);
     g_free(ctx);
@@ -2162,7 +2392,7 @@ static void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog) {
     GtkWidget *message_dialog;
     gint response;
     AsusdBatteryPlugin *plugin = g_object_get_data(G_OBJECT(dialog), "plugin");
-    if (!plugin || plugin->is_destroying) { g_warning("on_one_shot_clicked: plugin invalid"); return; }
+    if (!plugin) { g_warning("on_one_shot_clicked: plugin invalid"); return; }
     
     GtkWidget *limit_check = g_object_get_data(G_OBJECT(dialog), "limit_check");
     gboolean limit_enabled_in_dialog = FALSE;
@@ -2188,8 +2418,8 @@ static void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog) {
 }
 
 static void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin*)user_data;
-    if (!plugin || plugin->is_destroying) return;
+    AsusdBatteryPlugin *plugin = get_plugin_safe(user_data);
+    if (!plugin) return;
     
     GError *error = NULL;
     GDBusProxy *proxy = G_DBUS_PROXY(source);
@@ -2206,6 +2436,8 @@ static void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_d
         if (!plugin->hide_notifications)
             send_notification(_("One-shot full charge started"), _("The battery will charge to 100%% once."), FALSE, "battery-full-symbolic");
     }
+    
+    g_object_unref(plugin);
 }
 
 static void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *dialog) {
@@ -2224,7 +2456,7 @@ static void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *di
 }
 
 static void create_settings_dialog(AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_destroying) return;
+    if (!plugin) return;
     
     if (plugin->settings_dialog_open && plugin->dialog_state && plugin->dialog_state->dialog) {
         g_debug("create_settings_dialog: dialog already open");
@@ -2526,35 +2758,16 @@ static void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
         if (error) g_error_free(error);
         return;
     }
-    plugin_data = g_new0(AsusdBatteryPlugin, 1);
-    if (!plugin_data) { g_warning("Failed to allocate memory"); return; }
-    plugin_data->plugin = plugin;
-    plugin_data->current_profile = g_strdup("balanced");
-    plugin_data->asusd_state = ASUSD_STATE_UNAVAILABLE;
-    plugin_data->hide_icon = FALSE;
-    plugin_data->hide_text = FALSE;
-    plugin_data->hide_notifications = FALSE;
-    plugin_data->is_on_ac = TRUE;
-    plugin_data->last_notification_time = 0;
-    plugin_data->settings_dialog_open = FALSE;
-    plugin_data->saving_settings = FALSE;
-    plugin_data->dialog_state = NULL;
-    plugin_data->asusd_proxy = NULL;
-    plugin_data->upower_proxy = NULL;
-    plugin_data->connection = NULL;
-    plugin_data->asusd_init_retry_count = 0;
-    plugin_data->init_load_state = 0;
-    plugin_data->pending_calls = 0;
-    plugin_data->processing_ops = FALSE;
-    plugin_data->is_destroying = FALSE;
-    plugin_data->cancellable = g_cancellable_new();
-    plugin_data->operation_queue = g_queue_new();
-    load_settings(plugin_data);
     
+    plugin_data = g_object_new(ASUSD_TYPE_BATTERY_PLUGIN, NULL);
+    if (!plugin_data) { g_warning("Failed to allocate memory"); return; }
+    
+    plugin_data->plugin = plugin;
+    load_settings(plugin_data);
     create_fallback_profiles(plugin_data);
     
     plugin_data->button = gtk_button_new();
-    if (!plugin_data->button) { g_warning("Failed to create button"); g_free(plugin_data); return; }
+    if (!plugin_data->button) { g_warning("Failed to create button"); g_object_unref(plugin_data); return; }
     gtk_button_set_relief(GTK_BUTTON(plugin_data->button), GTK_RELIEF_NONE);
     gtk_widget_set_focus_on_click(plugin_data->button, FALSE);
     gtk_widget_set_tooltip_text(plugin_data->button, _("Manage performance profile"));
@@ -2573,17 +2786,6 @@ static void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     gtk_container_add(GTK_CONTAINER(plugin), plugin_data->button);
     gtk_widget_show_all(plugin_data->button);
     create_upower_proxy_async(plugin_data);
-    g_object_set_data_full(G_OBJECT(plugin), "plugin_data", plugin_data, asusd_battery_plugin_free);
-}
-
-static void asusd_battery_plugin_free(gpointer user_data) {
-    AsusdBatteryPlugin *plugin = (AsusdBatteryPlugin *)user_data;
-    if (!plugin) return;
-    asusd_cleanup(plugin);
-    if (plugin->dialog_state) { g_free(plugin->dialog_state); plugin->dialog_state = NULL; }
-    g_free(plugin->current_profile);
-    g_free(plugin->auto_switch_ac_profile);
-    g_free(plugin->auto_switch_battery_profile);
-    g_free(plugin->last_displayed_profile);
-    g_free(plugin);
+    
+    g_object_set_data_full(G_OBJECT(plugin), "plugin_data", plugin_data, (GDestroyNotify)g_object_unref);
 }
