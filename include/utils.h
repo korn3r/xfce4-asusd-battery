@@ -9,11 +9,12 @@
 #include "plugin.h"
 #include "profile-manager.h"
 #include "settings-dialog.h"
+
 #include <libxfce4util/libxfce4util.h>
 
 G_BEGIN_DECLS
 
-/* Async call context - FULL DEFINITION */
+/* Async call context */
 typedef struct _AsyncCallContext {
     GWeakRef plugin_ref;
     gchar *method_name;
@@ -38,6 +39,8 @@ AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
                                          gpointer user_data,
                                          GDestroyNotify destroy_notify);
 void async_call_context_free(AsyncCallContext *ctx);
+void async_call_context_ref(AsyncCallContext *ctx);
+void async_call_context_unref(AsyncCallContext *ctx);
 
 /* Dialog validation */
 gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id);

@@ -46,9 +46,8 @@ struct _AsusdBatteryPlugin {
     guint asusd_retry_timeout_id;
     guint asusd_init_retry_count;
     
-    /* Reconnection guard */
+    /* Reconnection guard - только флаг, reconnect_source_id удален */
     gboolean reconnecting;      /* Flag to prevent duplicate reconnection */
-    guint reconnect_source_id;  /* Timer source ID for reconnection */
     
     /* State */
     AsusdState asusd_state;

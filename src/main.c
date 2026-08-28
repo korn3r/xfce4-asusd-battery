@@ -85,10 +85,10 @@ static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
     plugin->operation_queue = g_queue_new();
     plugin->profiles = g_ptr_array_new_with_free_func((GDestroyNotify)profile_settings_free);
     plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    plugin->asusd_retry_timeout_id = 0;
     
-    /* NEW: Initialize reconnection guard fields */
+    /* Initialize reconnection guard flag */
     plugin->reconnecting = FALSE;
-    plugin->reconnect_source_id = 0;
 }
 
 /* ========== Обновление отображения ========== */

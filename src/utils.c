@@ -155,3 +155,13 @@ void init_i18n(void) {
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
     textdomain(GETTEXT_PACKAGE);
 }
+
+void async_call_context_ref(AsyncCallContext *ctx) {
+    if (!ctx) return;
+    g_atomic_int_inc(&ctx->ref_count);
+}
+
+void async_call_context_unref(AsyncCallContext *ctx) {
+    if (!ctx) return;
+    async_call_context_free(ctx);
+}

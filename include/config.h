@@ -9,6 +9,8 @@
 #define VERSION "1.0.0"
 
 #define CONFIG_CHANNEL "xfce4-asusd-battery"
-#define CONFIG_PROPERTY_PREFIX "/asusd-battery"
+
+/* ВОЗВРАЩЕН СТАРЫЙ ПУТЬ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ */
+#define CONFIG_PROPERTY_PREFIX "/plugins/xfce4-asusd-battery"
 
 #endif /* __CONFIG_H__ */

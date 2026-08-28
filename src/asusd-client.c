@@ -1,3 +1,4 @@
+/* src/asusd-client.c */
 #include "asusd-client.h"
 #include "profile-manager.h"
 #include "utils.h"
@@ -14,6 +15,24 @@
 #define ASUSD_INTERFACE "xyz.ljones.Platform"
 #define DBUS_PROPERTIES_INTERFACE "org.freedesktop.DBus.Properties"
 #define ASUSD_TIMEOUT_MS 5000
+
+/* ========== Forward declarations ========== */
+void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_proxy_properties_changed(GDBusProxy *proxy, GVariant *changed_properties,
+                                 GStrv invalidated_properties, gpointer user_data);
+void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_get_property_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void process_next_operation(AsusdBatteryPlugin *plugin);
+void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
 
 /* ========== Создание прокси ========== */
 
@@ -55,6 +74,10 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
         DEBUG_WARN("xfce4-asusd-battery: Failed to create proxy: %s", error->message);
         g_error_free(error);
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
+        
+        /* Clear reconnecting flag BEFORE scheduling retry */
+        plugin->reconnecting = FALSE;
+        
         if (plugin->asusd_retry_timeout_id == 0 && !plugin->is_disposing)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(5, asusd_retry_init, plugin);
         g_object_unref(plugin);
@@ -63,6 +86,7 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
     if (!plugin->asusd_proxy) {
         DEBUG_WARN("xfce4-asusd-battery: Proxy creation returned NULL");
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
+        plugin->reconnecting = FALSE;
         g_object_unref(plugin);
         return;
     }
@@ -83,12 +107,14 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
         DEBUG_TRACE("xfce4-asusd-battery: Owner exists, loading initial data...");
         plugin->asusd_state = ASUSD_STATE_AVAILABLE;
         plugin->init_load_state = 0;
+        plugin->reconnecting = FALSE;
         asusd_get_property_async(plugin, "PlatformProfileChoices",
                                 (GAsyncReadyCallback)on_profile_choices_loaded, plugin);
     } else {
         g_free(owner);
         DEBUG_TRACE("xfce4-asusd-battery: No owner yet, will retry");
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
+        plugin->reconnecting = FALSE;
         create_fallback_profiles(plugin);
         if (plugin->asusd_retry_timeout_id == 0 && !plugin->is_disposing)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(2, asusd_retry_init, plugin);
@@ -96,6 +122,8 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
     
     g_object_unref(plugin);
 }
+
+/* ========== Создание UPower прокси ========== */
 
 void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
@@ -317,6 +345,8 @@ void async_call_context_free(AsyncCallContext *ctx) {
     }
 }
 
+
+
 void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
                            GVariant *parameters, GAsyncReadyCallback callback,
                            gpointer user_data) {
@@ -393,13 +423,13 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     /* REMOVED: ctx->ref_count <= 0 check - UAF vulnerability */
     /* Instead, check plugin validity via weak ref */
     
+    async_call_context_ref(ctx);
+    
     AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
     if (!plugin || plugin->is_disposing) {
         DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed or disposing, discarding callback");
-        if (plugin) {
-            g_object_unref(plugin);
-        }
-        async_call_context_free(ctx);
+        if (plugin) g_object_unref(plugin);
+        async_call_context_unref(ctx);
         return;
     }
     
@@ -413,7 +443,7 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
         }
         if (error) g_error_free(error);
         g_object_unref(plugin);
-        async_call_context_free(ctx);
+        async_call_context_unref(ctx);
         return;
     }
     
@@ -430,10 +460,10 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
             g_error_free(error);
             
             /* Check if reconnection is already in progress */
-            if (plugin->reconnecting || plugin->reconnect_source_id > 0) {
+            if (plugin->reconnecting || plugin->asusd_retry_timeout_id > 0) {
                 DEBUG_WARN("xfce4-asusd-battery: Reconnection already in progress, skipping duplicate");
                 g_object_unref(plugin);
-                async_call_context_free(ctx);
+                async_call_context_unref(ctx);
                 return;
             }
             
@@ -442,7 +472,7 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
             asusd_init_async(plugin);
             
             g_object_unref(plugin);
-            async_call_context_free(ctx);
+            async_call_context_unref(ctx);
             return;
         }
         DEBUG_WARN("xfce4-asusd-battery: Operation failed: %s", error->message);
@@ -460,14 +490,8 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
         if (result) g_variant_unref(result);
     }
     
-    AsusdBatteryPlugin *plugin_for_next = plugin;
-    async_call_context_free(ctx);
-    
-    if (!plugin_for_next->is_disposing) {
-        process_next_operation(plugin_for_next);
-    }
-    
-    g_object_unref(plugin_for_next);
+    async_call_context_unref(ctx);
+    g_object_unref(plugin);
 }
 
 void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
@@ -478,6 +502,37 @@ void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
         DEBUG_TRACE("xfce4-asusd-battery: Call %s queued (state=%d)", method, plugin->asusd_state);
     }
     asusd_queue_operation(plugin, method, parameters, callback, user_data);
+}
+
+/* ========== Callback for async Get property ========== */
+
+void on_get_property_done(GObject *source, GAsyncResult *res, gpointer user_data) {
+    AsyncCallContext *ctx = (AsyncCallContext*)user_data;
+    if (!ctx) return;
+    
+    AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
+    if (!plugin || plugin->is_disposing) {
+        DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed, discarding get property callback");
+        if (plugin) g_object_unref(plugin);
+        async_call_context_free(ctx);
+        return;
+    }
+    
+    if (g_cancellable_is_cancelled(plugin->cancellable)) {
+        DEBUG_TRACE("xfce4-asusd-battery: Operation cancelled");
+        async_call_context_free(ctx);
+        g_object_unref(plugin);
+        return;
+    }
+    
+    /* Call original callback */
+    if (ctx->callback) {
+        GAsyncReadyCallback callback = ctx->callback;
+        callback(source, res, ctx->user_data);
+    }
+    
+    async_call_context_free(ctx);
+    g_object_unref(plugin);
 }
 
 /* ========== Работа со свойствами через GDBusConnection ========== */
@@ -494,6 +549,11 @@ void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
         return;
     }
     
+    /* Create context for safe user_data lifetime */
+    AsyncCallContext *ctx = async_call_context_new(plugin, NULL, NULL, callback, user_data, NULL);
+    ctx->method_name = g_strdup(property);
+    ctx->is_dialog_callback = FALSE;
+    
     GVariant *params = g_variant_new("(ss)", ASUSD_INTERFACE, property);
     g_dbus_connection_call(
         plugin->connection,
@@ -506,9 +566,10 @@ void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
         G_DBUS_CALL_FLAGS_NONE,
         ASUSD_TIMEOUT_MS,
         plugin->cancellable,
-        callback,
-        user_data
+        (GAsyncReadyCallback)on_get_property_done,
+        ctx
     );
+    g_variant_unref(params);
 }
 
 void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *property,
@@ -564,6 +625,7 @@ gboolean asusd_retry_init(gpointer user_data) {
     }
     
     plugin->asusd_retry_timeout_id = 0;
+    plugin->reconnecting = FALSE;  /* Clear flag before retry */
     DEBUG_TRACE("xfce4-asusd-battery: Retry init attempt %d", plugin->asusd_init_retry_count + 1);
     plugin->asusd_init_retry_count++;
     
@@ -595,16 +657,14 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (g_cancellable_is_cancelled(plugin->cancellable)) return;
     
-    /* Prevent duplicate initialization */
-    if (plugin->reconnecting) {
-        DEBUG_TRACE("xfce4-asusd-battery: Reconnection already in progress, skipping duplicate init");
-        return;
-    }
-    
-    if (plugin->reconnect_source_id > 0) {
-        DEBUG_TRACE("xfce4-asusd-battery: Reconnection timer already scheduled, skipping");
-        return;
-    }
+    /* 
+     * NOTE: reconnecting flag is NOT checked here.
+     * The flag is set by on_property_set_done() and cleared in:
+     * - on_asusd_proxy_created() (success or failure)
+     * - asusd_retry_init()
+     * - on_battery_profile_loaded()
+     * - asusd_cleanup()
+     */
     
     DEBUG_TRACE("xfce4-asusd-battery: Initializing asynchronously...");
     if (plugin->asusd_proxy) {
@@ -635,11 +695,7 @@ void asusd_cleanup(AsusdBatteryPlugin *plugin) {
     
     DEBUG_TRACE("xfce4-asusd-battery: Cleaning up");
     
-    /* Clear reconnection timers */
-    if (plugin->reconnect_source_id > 0) {
-        g_source_remove(plugin->reconnect_source_id);
-        plugin->reconnect_source_id = 0;
-    }
+    /* Clear reconnection flag */
     plugin->reconnecting = FALSE;
     
     if (plugin->cancellable) {
