@@ -1,8 +1,10 @@
 #include "profile-manager.h"
 #include "utils.h"
 #include "plugin.h"
+#include "config.h"
 #include <string.h>
 #include "debug.h"
+#include <libxfce4util/libxfce4util.h>
 
 ProfileSettings* profile_settings_new(guint32 enum_value, const gchar *default_name) {
     ProfileSettings *settings = g_new0(ProfileSettings, 1);

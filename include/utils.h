@@ -1,27 +1,61 @@
-#pragma once
+/* include/utils.h */
+#ifndef __UTILS_H__
+#define __UTILS_H__
 
+#include <glib.h>
+#include <gtk/gtk.h>
+#include <gio/gio.h>
+#include "config.h"
 #include "plugin.h"
+#include "profile-manager.h"
+#include "settings-dialog.h"
+#include <libxfce4util/libxfce4util.h>
 
-/* Получение плагина с refcount */
+G_BEGIN_DECLS
+
+/* Async call context - FULL DEFINITION */
+typedef struct _AsyncCallContext {
+    GWeakRef plugin_ref;
+    gchar *method_name;
+    GVariant *value;
+    GAsyncReadyCallback callback;
+    gpointer user_data;
+    GDestroyNotify destroy_notify;
+    gint ref_count;
+    guint dialog_id;
+    gboolean is_dialog_callback;
+} AsyncCallContext;
+
+/* Plugin reference helpers */
 AsusdBatteryPlugin* get_plugin_ref(gpointer user_data);
-
-/* Получение плагина из AsyncCallContext */
 AsusdBatteryPlugin* async_call_context_get_plugin_ref(AsyncCallContext *ctx);
 
-/* Проверка валидности диалога по ID */
+/* Async call context management */
+AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
+                                         const char *method_name,
+                                         GVariant *value,
+                                         GAsyncReadyCallback callback,
+                                         gpointer user_data,
+                                         GDestroyNotify destroy_notify);
+void async_call_context_free(AsyncCallContext *ctx);
+
+/* Dialog validation */
 gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id);
 
-/* Получение иконки для профиля */
+/* Profile helpers */
 const gchar* get_profile_icon(AsusdBatteryPlugin *plugin, const gchar *profile);
+const char* asusd_enum_to_default_name(guint32 enum_val);
 
-/* Проверка возможности отправки уведомления */
+/* Notification */
 gboolean can_send_notification(AsusdBatteryPlugin *plugin);
-
-/* Отправка уведомления */
 void send_notification(const gchar *message, const gchar *subtitle, gboolean is_error, const gchar *icon);
 
-/* Создание диалога "О программе" */
+/* About dialog */
 void create_about_dialog(AsusdBatteryPlugin *plugin);
 
-/* Определение имени профиля из enum */
-const char* asusd_enum_to_default_name(guint32 enum_val);
+/* I18n */
+void init_i18n(void);
+
+G_END_DECLS
+
+#endif /* __UTILS_H__ */

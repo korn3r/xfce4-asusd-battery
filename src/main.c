@@ -4,6 +4,7 @@
 #include "profile-manager.h"
 #include "asusd-client.h"
 #include "settings-dialog.h"
+#include "config.h"
 
 #include <gtk/gtk.h>
 #include <libxfce4panel/libxfce4panel.h>
@@ -84,6 +85,10 @@ static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
     plugin->operation_queue = g_queue_new();
     plugin->profiles = g_ptr_array_new_with_free_func((GDestroyNotify)profile_settings_free);
     plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    
+    /* NEW: Initialize reconnection guard fields */
+    plugin->reconnecting = FALSE;
+    plugin->reconnect_source_id = 0;
 }
 
 /* ========== Обновление отображения ========== */
@@ -206,14 +211,6 @@ void save_settings(AsusdBatteryPlugin *plugin) {
             g_free(key);
         }
     }
-}
-
-/* ========== Интернационализация ========== */
-
-void init_i18n(void) {
-    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
-    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
-    textdomain(GETTEXT_PACKAGE);
 }
 
 /* ========== UI Callbacks ========== */

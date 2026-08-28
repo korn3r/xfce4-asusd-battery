@@ -7,6 +7,7 @@
 #include "debug.h"
 
 #include <gio/gio.h>
+#include <libxfce4util/libxfce4util.h>
 
 #define ASUSD_BUS_NAME "xyz.ljones.Asusd"
 #define ASUSD_OBJECT_PATH "/xyz/ljones"
@@ -359,12 +360,8 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
         return; 
     }
     
-    /* Проверяем, что контекст еще валиден */
-    if (ctx->ref_count <= 0) {
-        DEBUG_TRACE("xfce4-asusd-battery: Context already freed");
-        plugin->processing_ops = FALSE;
-        return;
-    }
+    /* REMOVED: ctx->ref_count <= 0 check - UAF vulnerability */
+    /* ctx is valid because we hold a reference via async_call_context_new */
     
     plugin->processing_ops = TRUE;
     plugin->pending_calls++;
@@ -393,11 +390,8 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     AsyncCallContext *ctx = (AsyncCallContext*)user_data;
     if (!ctx) return;
     
-    /* Проверяем, что контекст еще валиден */
-    if (ctx->ref_count <= 0) {
-        DEBUG_TRACE("xfce4-asusd-battery: Context already freed, discarding callback");
-        return;
-    }
+    /* REMOVED: ctx->ref_count <= 0 check - UAF vulnerability */
+    /* Instead, check plugin validity via weak ref */
     
     AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
     if (!plugin || plugin->is_disposing) {
@@ -430,11 +424,23 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
     
     if (error) {
-        /* Проверяем, не отключился ли ASUSD */
+        /* Проверяем, не отключился ли ASUSD - with guard against duplicate reconnect */
         if (g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_DISCONNECTED)) {
             DEBUG_WARN("xfce4-asusd-battery: ASUSD disconnected, reconnecting...");
             g_error_free(error);
+            
+            /* Check if reconnection is already in progress */
+            if (plugin->reconnecting || plugin->reconnect_source_id > 0) {
+                DEBUG_WARN("xfce4-asusd-battery: Reconnection already in progress, skipping duplicate");
+                g_object_unref(plugin);
+                async_call_context_free(ctx);
+                return;
+            }
+            
+            /* Start reconnection with guard flag */
+            plugin->reconnecting = TRUE;
             asusd_init_async(plugin);
+            
             g_object_unref(plugin);
             async_call_context_free(ctx);
             return;
@@ -589,6 +595,17 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (g_cancellable_is_cancelled(plugin->cancellable)) return;
     
+    /* Prevent duplicate initialization */
+    if (plugin->reconnecting) {
+        DEBUG_TRACE("xfce4-asusd-battery: Reconnection already in progress, skipping duplicate init");
+        return;
+    }
+    
+    if (plugin->reconnect_source_id > 0) {
+        DEBUG_TRACE("xfce4-asusd-battery: Reconnection timer already scheduled, skipping");
+        return;
+    }
+    
     DEBUG_TRACE("xfce4-asusd-battery: Initializing asynchronously...");
     if (plugin->asusd_proxy) {
         DEBUG_TRACE("xfce4-asusd-battery: Cleaning up old proxy");
@@ -617,6 +634,13 @@ void asusd_cleanup(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     
     DEBUG_TRACE("xfce4-asusd-battery: Cleaning up");
+    
+    /* Clear reconnection timers */
+    if (plugin->reconnect_source_id > 0) {
+        g_source_remove(plugin->reconnect_source_id);
+        plugin->reconnect_source_id = 0;
+    }
+    plugin->reconnecting = FALSE;
     
     if (plugin->cancellable) {
         g_cancellable_cancel(plugin->cancellable);
@@ -1048,6 +1072,7 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     plugin->asusd_state = ASUSD_STATE_AVAILABLE;
     plugin->asusd_init_retry_count = 0;
+    plugin->reconnecting = FALSE;  /* Clear reconnection flag on successful init */
     update_profile_display(plugin, FALSE);
     DEBUG_INFO("xfce4-asusd-battery: ASUSD initialization completed");
     if (plugin->dialog_state && plugin->dialog_state->dialog)

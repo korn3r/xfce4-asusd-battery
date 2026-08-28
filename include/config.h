@@ -1,16 +1,14 @@
 /* include/config.h */
-#pragma once
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+#include <libintl.h>
 
 #define GETTEXT_PACKAGE "xfce4-asusd-battery"
 #define LOCALEDIR "/usr/share/locale"
+#define VERSION "1.0.0"
 
-/* ASUSD D-Bus константы */
-#define ASUSD_BUS_NAME "xyz.ljones.Asusd"
-#define ASUSD_OBJECT_PATH "/xyz/ljones"
-#define ASUSD_INTERFACE "xyz.ljones.Platform"
-#define DBUS_PROPERTIES_INTERFACE "org.freedesktop.DBus.Properties"
-#define ASUSD_TIMEOUT_MS 5000
-
-/* Xfconf */
 #define CONFIG_CHANNEL "xfce4-asusd-battery"
-#define CONFIG_PROPERTY_PREFIX "/plugins/xfce4-asusd-battery"
+#define CONFIG_PROPERTY_PREFIX "/asusd-battery"
+
+#endif /* __CONFIG_H__ */

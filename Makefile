@@ -58,12 +58,15 @@ $(TARGET): $(SOURCES) | include
 	@echo "Build complete: $(TARGET)"
 
 debug: $(SOURCES)
-	$(CC) -Wall -O0 -g `pkg-config --cflags $(PKG_DEPS)` \
+	@echo "Building with debug symbols..."
+	$(CC) -Wall -O0 -g -fPIC `pkg-config --cflags $(PKG_DEPS)` \
 		-DLOCALEDIR=\"/usr/share/locale\" \
 		-DGETTEXT_PACKAGE=\"xfce4-asusd-battery\" \
+		-DDEBUG \
 		-Iinclude \
-		`pkg-config --libs $(PKG_DEPS)` \
-		-o $(PLUGIN_NAME)-debug $(SOURCES)
+		-shared `pkg-config --libs $(PKG_DEPS)` \
+		-o $(PLUGIN_NAME)-debug.so $(SOURCES)
+	@echo "Debug build complete: $(PLUGIN_NAME)-debug.so"
 
 include:
 	mkdir -p include
@@ -150,6 +153,7 @@ install: all
 uninstall:
 	@echo "Uninstalling plugin from system..."
 	rm -f $(DESTDIR)$(PLUGIN_DIR)/$(TARGET)
+	rm -f $(DESTDIR)$(PLUGIN_DIR)/$(PLUGIN_NAME)-debug.so 2>/dev/null || true
 	rm -f $(DESTDIR)$(DESKTOP_DIR)/$(PLUGIN_NAME).desktop
 	@if [ -d locale ] && [ -n "$(LANGUAGES)" ]; then \
 		for lang_dir in locale/*; do \
@@ -170,7 +174,7 @@ uninstall:
 
 # ========== Очистка ==========
 clean:
-	rm -f $(TARGET) $(PLUGIN_NAME)-debug
+	rm -f $(TARGET) $(PLUGIN_NAME)-debug.so
 	rm -rf locale
 	@echo "Clean complete"
 
@@ -187,6 +191,9 @@ info:
 	@echo "  msgfmt available: $(HAVE_MSGFMT)"
 	@echo "  Translations exist: $(MO_EXISTS)"
 	@echo "  Languages: $(LANGUAGES)"
+	@echo "  Compiler: $(CC)"
+	@echo "  CFLAGS: $(CFLAGS)"
+	@echo "  LDFLAGS: $(LDFLAGS)"
 	@echo "============================================================"
 
 # ========== Помощь ==========
@@ -200,4 +207,4 @@ help:
 	@echo "  make info    - Show build information"
 	@echo "  make help    - Show this help"
 
-.PHONY: all install uninstall clean debug info help
+.PHONY: all install uninstall clean debug info help translations

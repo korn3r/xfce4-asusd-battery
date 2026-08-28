@@ -1,0 +1,174 @@
+diff --git a/src/main.c b/src/main.c
+index abc123..def456 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -45,6 +45,8 @@ struct _AsusdBatteryPlugin {
+     GtkWidget *image;
+     GtkWidget *label;
+     
++    guint reconnect_source_id;  /* Timer source ID for reconnection */
++    gboolean reconnecting;      /* Flag to prevent duplicate reconnection */
+     guint update_interval;
+     guint update_timeout_id;
+     
+@@ -63,7 +65,6 @@ struct _OperationContext {
+     GTask *task;
+     GDBusProxy *proxy;
+     AsusdOperationType type;
+-    gint ref_count;
+ };
+ 
+ /* Operation context management */
+@@ -71,7 +72,6 @@ static OperationContext* operation_context_new(AsusdBatteryPlugin *plugin,
+                                                 GDBusProxy *proxy,
+                                                 AsusdOperationType type) {
+     OperationContext *ctx = g_slice_new0(OperationContext);
+-    ctx->ref_count = 1;
+     ctx->plugin = plugin;
+     ctx->task = g_task_new(plugin, NULL, NULL, NULL);
+     ctx->proxy = proxy ? g_object_ref(proxy) : NULL;
+@@ -126,16 +126,6 @@ static void process_next_operation(AsusdBatteryPlugin *plugin) {
+         return;
+     }
+     
+-    /* CRITICAL: Check if context is still valid before using it */
+-    if (ctx->ref_count <= 0) {
+-        g_warning("Context already freed, skipping operation");
+-        g_queue_pop_head(plugin->operation_queue);
+-        if (ctx->task) {
+-            g_task_return_new_error(ctx->task, G_IO_ERROR, G_IO_ERROR_CANCELLED,
+-                                   "Context invalid");
+-            g_clear_object(&ctx->task);
+-        }
+-        operation_context_free(ctx);
+-        process_next_operation(plugin);
+-        return;
+-    }
+-    
+     switch (ctx->type) {
+         case OPERATION_SET_PROFILE:
+             if (ctx->proxy && ctx->profile_name) {
+@@ -174,7 +164,8 @@ static void on_property_set_done(GObject *source, GAsyncResult *res,
+         return;
+     }
+     
+-    if (ctx->ref_count <= 0) {
++    /* Check if plugin still exists - weak ref would be better but minimal fix */
++    if (!ctx->plugin || !ASUSDBATTERY_IS_PLUGIN(ctx->plugin)) {
+         g_warning("Context already freed, ignoring callback");
+         g_error_free(error);
+         g_clear_object(&ctx->task);
+@@ -193,7 +184,14 @@ static void on_property_set_done(GObject *source, GAsyncResult *res,
+         g_warning("D-Bus property set failed: %s", error->message);
+         
+         if (error->domain == G_DBUS_ERROR && 
+-            error->code == G_DBUS_ERROR_DISCONNECTED) {
++            error->code == G_DBUS_ERROR_DISCONNECTED &&
++            !plugin->reconnecting && plugin->reconnect_source_id == 0) {
++            /* Check if reconnection is already in progress */
++            if (plugin->reconnecting || plugin->reconnect_source_id > 0) {
++                g_warning("Reconnection already in progress, skipping duplicate");
++                goto cleanup;
++            }
++            
+             g_warning("D-Bus disconnected, attempting to reconnect...");
+             asusd_init_async(plugin);
+         }
+@@ -207,6 +205,7 @@ static void on_property_set_done(GObject *source, GAsyncResult *res,
+         }
+     }
+     
++cleanup:
+     /* Clean up */
+     g_clear_object(&ctx->task);
+     
+@@ -214,6 +213,7 @@ static void on_property_set_done(GObject *source, GAsyncResult *res,
+     if (!g_queue_is_empty(plugin->operation_queue))
+         g_queue_pop_head(plugin->operation_queue);
+     
++    /* Note: operation_context_free may access plugin, but we checked it above */
+     operation_context_free(ctx);
+     
+     process_next_operation(plugin);
+@@ -557,6 +557,8 @@ static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
+     plugin->operation_in_progress = FALSE;
+     plugin->update_interval = 5;
+     plugin->update_timeout_id = 0;
++    plugin->reconnect_source_id = 0;
++    plugin->reconnecting = FALSE;
+     plugin->battery_percent = 0;
+     plugin->show_label = TRUE;
+     plugin->show_icon = TRUE;
+
+diff --git a/src/asusd-client.c b/src/asusd-client.c
+index 789ghi..012jkl 100644
+--- a/src/asusd-client.c
++++ b/src/asusd-client.c
+@@ -25,6 +25,7 @@ struct _AsusdClient {
+     GDBusProxy *proxy;
+     GCancellable *cancellable;
+     guint reconnect_timeout_id;
++    gboolean initializing;  /* Guard flag for async init */
+ };
+ 
+ G_DEFINE_TYPE(AsusdClient, asusd_client, G_TYPE_OBJECT)
+@@ -57,6 +58,7 @@ static void asusd_client_init(AsusdClient *client) {
+     client->proxy = NULL;
+     client->cancellable = g_cancellable_new();
+     client->reconnect_timeout_id = 0;
++    client->initializing = FALSE;
+ }
+ 
+ static void asusd_client_finalize(GObject *object) {
+@@ -82,6 +84,14 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
+     if (!plugin || !plugin->client)
+         return;
+     
++    /* Prevent duplicate initialization */
++    if (plugin->client->initializing) {
++        g_debug("ASUS D-Bus initialization already in progress");
++        return;
++    }
++    
++    plugin->client->initializing = TRUE;
++    
+     GDBusProxy *proxy = g_dbus_proxy_new_for_bus_sync(
+         G_BUS_TYPE_SYSTEM,
+         G_DBUS_PROXY_FLAGS_NONE,
+@@ -91,13 +101,18 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
+         NULL,
+         NULL);
+     
++    plugin->client->initializing = FALSE;
++    
+     if (!proxy) {
+         g_warning("Failed to connect to ASUSD D-Bus service");
+-        /* Schedule reconnect attempt */
+-        if (plugin->client->reconnect_timeout_id == 0) {
++        /* Schedule reconnect attempt if not already scheduled */
++        if (plugin->client->reconnect_timeout_id == 0 && 
++            !plugin->reconnecting) {
++            plugin->reconnecting = TRUE;
+             plugin->client->reconnect_timeout_id = 
+                 g_timeout_add_seconds(5, reconnect_timeout_cb, plugin);
+         }
++        plugin->reconnecting = FALSE;
+         return;
+     }
+     
+@@ -107,12 +122,8 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
+     /* Set up signal handlers */
+     g_signal_connect(plugin->client->proxy, "g-signal",
+                     G_CALLBACK(asusd_signal_cb), plugin);
+-
+-    /* Schedule periodic update */
+-    if (plugin->update_timeout_id == 0) {
+-        plugin->update_timeout_id = 
+-            g_timeout_add_seconds(plugin->update_interval, update_timeout_cb, plugin);
+-    }
++    
++    /* Clear reconnecting flag */
++    plugin->reconnecting = FALSE;
+ }
+-
+-/* ... rest of file ... */

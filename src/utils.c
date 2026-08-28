@@ -1,10 +1,16 @@
+/* src/utils.c */
 #include "utils.h"
 #include "plugin.h"
+#include "profile-manager.h"
+#include "settings-dialog.h"
+#include "config.h"
 #include "debug.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <libxfce4util/libxfce4util.h>
 
 /* ========== Вспомогательные функции для работы с references ========== */
 
@@ -142,4 +148,10 @@ const char* asusd_enum_to_default_name(guint32 enum_val) {
         case 2: return "quiet";
         default: return "unknown";
     }
+}
+
+void init_i18n(void) {
+    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+    textdomain(GETTEXT_PACKAGE);
 }

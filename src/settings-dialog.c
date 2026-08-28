@@ -1,9 +1,11 @@
 #include "settings-dialog.h"
 #include "utils.h"
 #include "profile-manager.h"
+#include "config.h"
 #include "plugin.h"
 #include "asusd-client.h"
 #include "debug.h"
+#include <libxfce4util/libxfce4util.h>
 
 /* ========== Функции диалога настроек ========== */
 
