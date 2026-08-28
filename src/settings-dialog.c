@@ -138,14 +138,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     switch (step) {
         case 0: {
-            if (error || !result) {
-                if (error) DEBUG_TRACE("Failed to get ChangePlatformProfileOnAc: %s", error->message);
-                else DEBUG_TRACE("No result for ChangePlatformProfileOnAc");
-                if (error) g_error_free(error);
+            if (error) {
+                DEBUG_TRACE("Failed to get ChangePlatformProfileOnAc: %s", error->message);
+                g_error_free(error);
                 plugin->auto_switch_ac_enabled = FALSE;
                 if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_ac && !plugin->dialog_state->dirty_ac_enabled)
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_ac), FALSE);
-            } else {
+            } else if (result) {
                 GVariant *value = NULL;
                 g_variant_get(result, "(v)", &value);
                 if (value) {
@@ -176,14 +175,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             break;
         }
         case 1: {
-            if (error || !result) {
-                if (error) DEBUG_TRACE("Failed to get ChangePlatformProfileOnBattery: %s", error->message);
-                else DEBUG_TRACE("No result for ChangePlatformProfileOnBattery");
-                if (error) g_error_free(error);
+            if (error) {
+                DEBUG_TRACE("Failed to get ChangePlatformProfileOnBattery: %s", error->message);
+                g_error_free(error);
                 plugin->auto_switch_battery_enabled = FALSE;
                 if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_battery && !plugin->dialog_state->dirty_battery_enabled)
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_battery), FALSE);
-            } else {
+            } else if (result) {
                 GVariant *value = NULL;
                 g_variant_get(result, "(v)", &value);
                 if (value) {
@@ -220,13 +218,12 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 if (settings->default_name) default_profile = settings->default_name;
             }
             
-            if (error || !result) {
-                if (error) DEBUG_TRACE("Failed to get PlatformProfileOnAc: %s", error->message);
-                else DEBUG_TRACE("No result for PlatformProfileOnAc");
-                if (error) g_error_free(error);
+            if (error) {
+                DEBUG_TRACE("Failed to get PlatformProfileOnAc: %s", error->message);
+                g_error_free(error);
                 g_free(plugin->auto_switch_ac_profile);
                 plugin->auto_switch_ac_profile = g_strdup(default_profile);
-            } else {
+            } else if (result) {
                 GVariant *value = NULL;
                 g_variant_get(result, "(v)", &value);
                 if (value) {
@@ -282,13 +279,12 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 if (settings->default_name) default_profile = settings->default_name;
             }
             
-            if (error || !result) {
-                if (error) DEBUG_TRACE("Failed to get PlatformProfileOnBattery: %s", error->message);
-                else DEBUG_TRACE("No result for PlatformProfileOnBattery");
-                if (error) g_error_free(error);
+            if (error) {
+                DEBUG_TRACE("Failed to get PlatformProfileOnBattery: %s", error->message);
+                g_error_free(error);
                 g_free(plugin->auto_switch_battery_profile);
                 plugin->auto_switch_battery_profile = g_strdup(default_profile);
-            } else {
+            } else if (result) {
                 GVariant *value = NULL;
                 g_variant_get(result, "(v)", &value);
                 if (value) {
@@ -338,15 +334,14 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             break;
         }
         case 4: {
-            if (error || !result) {
-                if (error) DEBUG_TRACE("Failed to get ChargeControlEndThreshold: %s", error->message);
-                else DEBUG_TRACE("No result for ChargeControlEndThreshold");
-                if (error) g_error_free(error);
+            if (error) {
+                DEBUG_TRACE("Failed to get ChargeControlEndThreshold: %s", error->message);
+                g_error_free(error);
                 plugin->current_battery_limit = 100;
                 plugin->battery_limit_enabled = FALSE;
                 if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->limit_check && !plugin->dialog_state->dirty_limit)
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->limit_check), FALSE);
-            } else {
+            } else if (result) {
                 GVariant *value = NULL;
                 g_variant_get(result, "(v)", &value);
                 if (value) {
