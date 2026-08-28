@@ -1,5 +1,6 @@
 #include "utils.h"
 #include "plugin.h"
+#include "debug.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,7 +96,11 @@ void send_notification(const gchar *message, const gchar *subtitle, gboolean is_
         (gchar*)(subtitle ? subtitle : ""),
         NULL
     };
-    g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &error)) {
+        DEBUG_WARN("xfce4-asusd-battery: Failed to send notification: %s", error ? error->message : "unknown");
+        g_error_free(error);
+    }
 }
 
 void create_about_dialog(AsusdBatteryPlugin *plugin) {

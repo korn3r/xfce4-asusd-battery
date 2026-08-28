@@ -4,10 +4,11 @@
 
 CC = gcc
 PKG_DEPS = glib-2.0 gtk+-3.0 libxfce4panel-2.0 libxfce4util-1.0 libxfconf-0 gio-2.0
+EXTRA_CFLAGS ?=
 CFLAGS = -Wall -O2 -fPIC `pkg-config --cflags $(PKG_DEPS)` \
          -DLOCALEDIR=\"/usr/share/locale\" \
          -DGETTEXT_PACKAGE=\"xfce4-asusd-battery\" \
-         -Iinclude
+         -Iinclude $(EXTRA_CFLAGS)
 LDFLAGS = -shared `pkg-config --libs $(PKG_DEPS)`
 TARGET = libxfce4-asusd-battery.so
 PLUGIN_NAME = xfce4-asusd-battery

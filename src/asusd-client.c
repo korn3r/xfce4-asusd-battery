@@ -214,17 +214,17 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
                 if (plugin->dialog_state && plugin->dialog_state->combo_ac && !plugin->dialog_state->dirty_ac_profile) {
                     GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_ac));
                     if (model) {
-                        GtkTreeIter iter;
+                        GtkTreeIter tree_iter;
                         gboolean found = FALSE;
                         gchar *profile_name = NULL;
                         gint index = 0;
-                        if (gtk_tree_model_get_iter_first(model, &iter)) {
+                        if (gtk_tree_model_get_iter_first(model, &tree_iter)) {
                             do {
-                                gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                                gtk_tree_model_get(model, &tree_iter, 0, &profile_name, -1);
                                 if (g_strcmp0(profile_name, name) == 0) { found = TRUE; break; }
                                 g_free(profile_name);
                                 index++;
-                            } while (gtk_tree_model_iter_next(model, &iter));
+                            } while (gtk_tree_model_iter_next(model, &tree_iter));
                             g_free(profile_name);
                         }
                         if (found) {
@@ -243,17 +243,17 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
                 if (plugin->dialog_state && plugin->dialog_state->combo_battery && !plugin->dialog_state->dirty_battery_profile) {
                     GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_battery));
                     if (model) {
-                        GtkTreeIter iter;
+                        GtkTreeIter tree_iter;
                         gboolean found = FALSE;
                         gchar *profile_name = NULL;
                         gint index = 0;
-                        if (gtk_tree_model_get_iter_first(model, &iter)) {
+                        if (gtk_tree_model_get_iter_first(model, &tree_iter)) {
                             do {
-                                gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
+                                gtk_tree_model_get(model, &tree_iter, 0, &profile_name, -1);
                                 if (g_strcmp0(profile_name, name) == 0) { found = TRUE; break; }
                                 g_free(profile_name);
                                 index++;
-                            } while (gtk_tree_model_iter_next(model, &iter));
+                            } while (gtk_tree_model_iter_next(model, &tree_iter));
                             g_free(profile_name);
                         }
                         if (found) {
@@ -359,6 +359,13 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
         return; 
     }
     
+    /* Проверяем, что контекст еще валиден */
+    if (ctx->ref_count <= 0) {
+        DEBUG_TRACE("xfce4-asusd-battery: Context already freed");
+        plugin->processing_ops = FALSE;
+        return;
+    }
+    
     plugin->processing_ops = TRUE;
     plugin->pending_calls++;
     
@@ -385,6 +392,12 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
 void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data) {
     AsyncCallContext *ctx = (AsyncCallContext*)user_data;
     if (!ctx) return;
+    
+    /* Проверяем, что контекст еще валиден */
+    if (ctx->ref_count <= 0) {
+        DEBUG_TRACE("xfce4-asusd-battery: Context already freed, discarding callback");
+        return;
+    }
     
     AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
     if (!plugin || plugin->is_disposing) {
@@ -417,6 +430,15 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
     
     if (error) {
+        /* Проверяем, не отключился ли ASUSD */
+        if (g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_DISCONNECTED)) {
+            DEBUG_WARN("xfce4-asusd-battery: ASUSD disconnected, reconnecting...");
+            g_error_free(error);
+            asusd_init_async(plugin);
+            g_object_unref(plugin);
+            async_call_context_free(ctx);
+            return;
+        }
         DEBUG_WARN("xfce4-asusd-battery: Operation failed: %s", error->message);
         if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
