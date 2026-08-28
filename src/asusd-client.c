@@ -416,82 +416,100 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
     );
 }
 
-void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsyncCallContext *ctx = (AsyncCallContext*)user_data;
-    if (!ctx) return;
-    
-    /* REMOVED: ctx->ref_count <= 0 check - UAF vulnerability */
-    /* Instead, check plugin validity via weak ref */
-    
-    async_call_context_ref(ctx);
-    
-    AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
+void on_property_set_done(GObject *source,
+                          GAsyncResult *res,
+                          gpointer user_data)
+{
+    AsyncCallContext *ctx = (AsyncCallContext *)user_data;
+    if (!ctx)
+        return;
+
+    AsusdBatteryPlugin *plugin =
+        async_call_context_get_plugin_ref(ctx);
+
     if (!plugin || plugin->is_disposing) {
         DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed or disposing, discarding callback");
-        if (plugin) g_object_unref(plugin);
+
+        if (plugin)
+            g_object_unref(plugin);
+
         async_call_context_unref(ctx);
         return;
     }
-    
+
     if (g_cancellable_is_cancelled(plugin->cancellable)) {
         DEBUG_TRACE("xfce4-asusd-battery: Operation cancelled");
-        GError *error = NULL;
-        g_set_error(&error, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Operation cancelled");
+
         if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
             callback(source, NULL, ctx->user_data);
         }
-        if (error) g_error_free(error);
+
         g_object_unref(plugin);
         async_call_context_unref(ctx);
         return;
     }
-    
+
     plugin->pending_calls--;
-    
+
     GError *error = NULL;
     GDBusProxy *proxy = G_DBUS_PROXY(source);
     GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
-    
+
     if (error) {
-        /* Проверяем, не отключился ли ASUSD - with guard against duplicate reconnect */
-        if (g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_DISCONNECTED)) {
+        if (g_error_matches(error,
+                            G_DBUS_ERROR,
+                            G_DBUS_ERROR_DISCONNECTED)) {
+
             DEBUG_WARN("xfce4-asusd-battery: ASUSD disconnected, reconnecting...");
-            g_error_free(error);
-            
-            /* Check if reconnection is already in progress */
-            if (plugin->reconnecting || plugin->asusd_retry_timeout_id > 0) {
-                DEBUG_WARN("xfce4-asusd-battery: Reconnection already in progress, skipping duplicate");
+
+            if (plugin->reconnecting ||
+                plugin->asusd_retry_timeout_id > 0) {
+
+                DEBUG_WARN(
+                    "xfce4-asusd-battery: Reconnection already in progress, skipping duplicate");
+
+                g_error_free(error);
                 g_object_unref(plugin);
                 async_call_context_unref(ctx);
                 return;
             }
-            
-            /* Start reconnection with guard flag */
+
             plugin->reconnecting = TRUE;
+            g_error_free(error);
+
             asusd_init_async(plugin);
-            
+
             g_object_unref(plugin);
             async_call_context_unref(ctx);
             return;
         }
-        DEBUG_WARN("xfce4-asusd-battery: Operation failed: %s", error->message);
+
+        DEBUG_WARN("xfce4-asusd-battery: Operation failed: %s",
+                   error->message);
+
         if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
             callback(source, res, ctx->user_data);
         }
+
         g_error_free(error);
     } else {
-        DEBUG_INFO("xfce4-asusd-battery: Operation completed successfully: %s", ctx->method_name ? ctx->method_name : "unknown");
+        DEBUG_INFO(
+            "xfce4-asusd-battery: Operation completed successfully: %s",
+            ctx->method_name ? ctx->method_name : "unknown");
+
         if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
             callback(source, res, ctx->user_data);
         }
-        if (result) g_variant_unref(result);
+
+        if (result)
+            g_variant_unref(result);
     }
-    
-    async_call_context_unref(ctx);
+
     g_object_unref(plugin);
+    async_call_context_unref(ctx);
 }
 
 void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
@@ -506,40 +524,44 @@ void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
 
 /* ========== Callback for async Get property ========== */
 
-void on_get_property_done(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsyncCallContext *ctx = (AsyncCallContext*)user_data;
-    if (!ctx) return;
-    
-    /* Проверяем, жив ли плагин */
-    AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
+void on_get_property_done(GObject *source,
+                         GAsyncResult *res,
+                         gpointer user_data)
+{
+    AsyncCallContext *ctx = (AsyncCallContext *)user_data;
+    if (!ctx)
+        return;
+
+    AsusdBatteryPlugin *plugin =
+        async_call_context_get_plugin_ref(ctx);
+
     if (!plugin || plugin->is_disposing) {
-        DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed, discarding get property callback");
-        if (plugin) g_object_unref(plugin);
-        /* НЕ освобождаем res - он будет освобожден автоматически */
-        async_call_context_free(ctx);
+        DEBUG_TRACE(
+            "xfce4-asusd-battery: Plugin destroyed, discarding get property callback");
+
+        if (plugin)
+            g_object_unref(plugin);
+
+        async_call_context_unref(ctx);
         return;
     }
-    
+
     if (g_cancellable_is_cancelled(plugin->cancellable)) {
-        DEBUG_TRACE("xfce4-asusd-battery: Operation cancelled");
-        /* НЕ освобождаем res - он будет освобожден автоматически */
-        async_call_context_free(ctx);
+        DEBUG_TRACE(
+            "xfce4-asusd-battery: Get property operation cancelled");
+
         g_object_unref(plugin);
+        async_call_context_unref(ctx);
         return;
     }
-    
-    /* Вызываем оригинальный callback с результатом */
+
     if (ctx->callback) {
         GAsyncReadyCallback callback = ctx->callback;
         callback(source, res, ctx->user_data);
     }
-    
-    /* 
-     * ВАЖНО: НЕ освобождаем res и source!
-     * Они управляются GLib и будут освобождены автоматически.
-     */
-    async_call_context_free(ctx);
+
     g_object_unref(plugin);
+    async_call_context_unref(ctx);
 }
 
 /* ========== Работа со свойствами через GDBusConnection ========== */
