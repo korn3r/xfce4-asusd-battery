@@ -4,12 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "debug.h"
+
+/* ========== Вспомогательные функции для работы с references ========== */
 
 AsusdBatteryPlugin* get_plugin_ref(gpointer user_data) {
     if (!user_data) return NULL;
     if (!G_IS_OBJECT(user_data)) return NULL;
     if (!ASUSD_IS_BATTERY_PLUGIN(user_data)) return NULL;
+    
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(user_data);
+    if (plugin->is_disposing) {
+        g_object_unref(user_data);
+        return NULL;
+    }
     return g_object_ref(ASUSD_BATTERY_PLUGIN(user_data));
 }
 
@@ -18,6 +25,11 @@ AsusdBatteryPlugin* async_call_context_get_plugin_ref(AsyncCallContext *ctx) {
     GObject *obj = g_weak_ref_get(&ctx->plugin_ref);
     if (!obj) return NULL;
     if (!ASUSD_IS_BATTERY_PLUGIN(obj)) {
+        g_object_unref(obj);
+        return NULL;
+    }
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(obj);
+    if (plugin->is_disposing) {
         g_object_unref(obj);
         return NULL;
     }

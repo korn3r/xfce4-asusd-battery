@@ -21,7 +21,7 @@ static void asusd_battery_plugin_dispose(GObject *object) {
     if (plugin->is_disposing) return;
     plugin->is_disposing = TRUE;
     
-    DEBUG_DEBUG("AsusdBatteryPlugin: dispose");
+    DEBUG_TRACE("AsusdBatteryPlugin: dispose");
     
     asusd_cleanup(plugin);
     
@@ -31,7 +31,7 @@ static void asusd_battery_plugin_dispose(GObject *object) {
 static void asusd_battery_plugin_finalize(GObject *object) {
     AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
     
-    DEBUG_DEBUG("AsusdBatteryPlugin: finalize");
+    DEBUG_TRACE("AsusdBatteryPlugin: finalize");
     
     g_free(plugin->current_profile);
     g_free(plugin->auto_switch_ac_profile);
@@ -92,21 +92,21 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     if (!plugin || plugin->is_disposing) return;
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        DEBUG_DEBUG("update_profile_display: No profiles loaded, creating fallback");
+        DEBUG_TRACE("update_profile_display: No profiles loaded, creating fallback");
         create_fallback_profiles(plugin);
     }
     
     const gchar *profile = plugin->current_profile ? plugin->current_profile : "balanced";
     if (g_strcmp0(profile, "unknown") == 0) {
         profile = "balanced";
-        DEBUG_DEBUG("update_profile_display: profile was 'unknown', using 'balanced'");
+        DEBUG_TRACE("update_profile_display: profile was 'unknown', using 'balanced'");
     }
     
-    DEBUG_DEBUG("=== update_profile_display ===");
-    DEBUG_DEBUG("  should_notify = %d", should_notify);
-    DEBUG_DEBUG("  hide_notifications = %d", plugin->hide_notifications);
-    DEBUG_DEBUG("  profile = '%s'", profile);
-    DEBUG_DEBUG("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
+    DEBUG_TRACE("=== update_profile_display ===");
+    DEBUG_TRACE("  should_notify = %d", should_notify);
+    DEBUG_TRACE("  hide_notifications = %d", plugin->hide_notifications);
+    DEBUG_TRACE("  profile = '%s'", profile);
+    DEBUG_TRACE("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
     
     gboolean profile_changed = FALSE;
     if (should_notify && !plugin->hide_notifications && plugin->asusd_state == ASUSD_STATE_AVAILABLE) {
@@ -159,7 +159,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     }
     
     if (profile_changed && profile && g_strcmp0(profile, "unknown") != 0 && can_send_notification(plugin)) {
-        DEBUG_DEBUG("  >>> SENDING NOTIFICATION for profile: %s", profile);
+        DEBUG_TRACE("  >>> SENDING NOTIFICATION for profile: %s", profile);
         gchar *display_name = g_strdup(profile);
         if (display_name[0] >= 'a' && display_name[0] <= 'z') display_name[0] = g_ascii_toupper(display_name[0]);
         const gchar *icon = get_profile_icon(plugin, profile);
@@ -168,7 +168,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         g_free(subtitle);
         g_free(display_name);
     }
-    DEBUG_DEBUG("=== end update_profile_display ===");
+    DEBUG_TRACE("=== end update_profile_display ===");
 }
 
 /* ========== Настройки ========== */
@@ -296,7 +296,7 @@ void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data)
         return;
     }
     if (result) g_variant_unref(result);
-    DEBUG_DEBUG("Profile set successfully, waiting for property change signal");
+    DEBUG_TRACE("Profile set successfully, waiting for property change signal");
     g_object_unref(plugin);
 }
 
@@ -334,6 +334,12 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     debug_init();
     DEBUG_TRACE_ENTER();
     DEBUG_INFO("Initializing ASUS Battery plugin v%s", VERSION);
+
+    DEBUG_DEBUG("xfce4-asusd-battery: D-Bus interface configuration:");
+    DEBUG_DEBUG("  ASUSD_BUS_NAME       = %s", "xyz.ljones.Asusd");
+    DEBUG_DEBUG("  ASUSD_OBJECT_PATH    = %s", "/xyz/ljones");
+    DEBUG_DEBUG("  ASUSD_INTERFACE      = %s", "xyz.ljones.Platform");
+    DEBUG_DEBUG("  DBUS_PROPERTIES      = %s", "org.freedesktop.DBus.Properties");
 
     AsusdBatteryPlugin *plugin_data;
     GError *error = NULL;

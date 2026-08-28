@@ -25,7 +25,7 @@ const gchar* profile_name_from_enum(AsusdBatteryPlugin *plugin, guint32 enum_val
     if (!plugin) return "balanced";
     
     if (!plugin->profile_lookup) {
-        DEBUG_DEBUG("profile_name_from_enum: profile_lookup is NULL, using fallback");
+        DEBUG_TRACE("profile_name_from_enum: profile_lookup is NULL, using fallback");
         return asusd_enum_to_default_name(enum_value);
     }
     
@@ -45,7 +45,7 @@ gboolean profile_enum_from_name(AsusdBatteryPlugin *plugin, const gchar *name, g
     if (!plugin || !name || !enum_value) return FALSE;
     
     if (!plugin->profile_lookup) {
-        DEBUG_DEBUG("profile_enum_from_name: profile_lookup is NULL");
+        DEBUG_TRACE("profile_enum_from_name: profile_lookup is NULL");
         return FALSE;
     }
     
@@ -70,11 +70,11 @@ void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
     if (plugin->profiles && plugin->profiles->len > 0) {
-        DEBUG_DEBUG("ASUSD: Profiles already exist (%d), not creating fallback", plugin->profiles->len);
+        DEBUG_TRACE("ASUSD: Profiles already exist (%d), not creating fallback", plugin->profiles->len);
         return;
     }
     
-    DEBUG_DEBUG("ASUSD: Creating fallback profiles");
+    DEBUG_TRACE("ASUSD: Creating fallback profiles");
     
     if (plugin->profiles) {
         g_ptr_array_free(plugin->profiles, TRUE);
@@ -116,7 +116,7 @@ void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
         
         g_ptr_array_add(plugin->profiles, settings);
         g_hash_table_insert(plugin->profile_lookup, GUINT_TO_POINTER(i), settings);
-        DEBUG_DEBUG("ASUSD: Added fallback profile: %s (enum: %d)", default_profiles[i], i);
+        DEBUG_TRACE("ASUSD: Added fallback profile: %s (enum: %d)", default_profiles[i], i);
     }
 }
 
@@ -149,7 +149,7 @@ void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
         g_free(key);
         g_ptr_array_add(plugin->profiles, settings);
         g_hash_table_insert(plugin->profile_lookup, GUINT_TO_POINTER(enum_value), settings);
-        DEBUG_DEBUG("ASUSD: Loaded profile: %s (enum: %u)", default_name, enum_value);
+        DEBUG_TRACE("ASUSD: Loaded profile: %s (enum: %u)", default_name, enum_value);
     }
 }
 
@@ -157,12 +157,12 @@ gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
     if (!plugin) return NULL;
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        DEBUG_DEBUG("asusd_get_available_profiles: no profiles loaded, creating fallback");
+        DEBUG_TRACE("asusd_get_available_profiles: no profiles loaded, creating fallback");
         create_fallback_profiles(plugin);
     }
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        DEBUG_DEBUG("asusd_get_available_profiles: still no profiles, returning empty");
+        DEBUG_TRACE("asusd_get_available_profiles: still no profiles, returning empty");
         gchar **empty = g_new0(gchar*, 1);
         return empty;
     }

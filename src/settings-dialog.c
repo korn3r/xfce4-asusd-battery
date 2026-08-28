@@ -22,7 +22,7 @@ void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
     state->syncing_ui = TRUE;
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        DEBUG_DEBUG("settings_dialog_update_ui: No profiles loaded, creating fallback");
+        DEBUG_TRACE("settings_dialog_update_ui: No profiles loaded, creating fallback");
         create_fallback_profiles(plugin);
     }
     
@@ -83,14 +83,14 @@ void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
 void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_dirty) {
     if (!plugin || !plugin->dialog_state || plugin->is_disposing) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        DEBUG_DEBUG("settings_dialog_sync_from_asusd: ASUSD not available, using cached values");
+        DEBUG_TRACE("settings_dialog_sync_from_asusd: ASUSD not available, using cached values");
         settings_dialog_update_ui(plugin);
         return;
     }
     
     guint dialog_id = plugin->dialog_state->dialog_id;
     plugin->dialog_state->syncing_ui = TRUE;
-    DEBUG_DEBUG("settings_dialog_sync_from_asusd: Loading settings from ASUSD");
+    DEBUG_TRACE("settings_dialog_sync_from_asusd: Loading settings from ASUSD");
     
     AsyncCallContext *ctx = async_call_context_new(plugin, NULL, NULL,
                                                    (GAsyncReadyCallback)on_dialog_property_loaded, NULL, NULL);
@@ -108,7 +108,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
     if (!plugin || plugin->is_disposing) {
-        DEBUG_DEBUG("on_dialog_property_loaded: plugin destroyed or disposing");
+        DEBUG_TRACE("on_dialog_property_loaded: plugin destroyed or disposing");
         if (plugin) g_object_unref(plugin);
         async_call_context_free(ctx);
         return;
@@ -118,14 +118,14 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     int step = GPOINTER_TO_INT(ctx->user_data);
     
     if (!plugin->dialog_state) {
-        DEBUG_DEBUG("on_dialog_property_loaded: dialog_state is NULL, discarding");
+        DEBUG_TRACE("on_dialog_property_loaded: dialog_state is NULL, discarding");
         g_object_unref(plugin);
         async_call_context_free(ctx);
         return;
     }
     
     if (!is_dialog_valid(plugin, dialog_id)) {
-        DEBUG_DEBUG("on_dialog_property_loaded: dialog changed or destroyed (id %u)", dialog_id);
+        DEBUG_TRACE("on_dialog_property_loaded: dialog changed or destroyed (id %u)", dialog_id);
         g_object_unref(plugin);
         async_call_context_free(ctx);
         return;
@@ -137,8 +137,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     switch (step) {
         case 0: {
             if (error || !result) {
-                if (error) DEBUG_DEBUG("Failed to get ChangePlatformProfileOnAc: %s", error->message);
-                else DEBUG_DEBUG("No result for ChangePlatformProfileOnAc");
+                if (error) DEBUG_TRACE("Failed to get ChangePlatformProfileOnAc: %s", error->message);
+                else DEBUG_TRACE("No result for ChangePlatformProfileOnAc");
                 if (error) g_error_free(error);
                 plugin->auto_switch_ac_enabled = FALSE;
                 if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_ac && !plugin->dialog_state->dirty_ac_enabled)
@@ -156,7 +156,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         gboolean ac_enabled;
                         g_variant_get(value, "b", &ac_enabled);
                         plugin->auto_switch_ac_enabled = ac_enabled;
-                        DEBUG_DEBUG("ChangePlatformProfileOnAc = %d", ac_enabled);
+                        DEBUG_TRACE("ChangePlatformProfileOnAc = %d", ac_enabled);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_ac && !plugin->dialog_state->dirty_ac_enabled)
                             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_ac), ac_enabled);
                     }
@@ -175,8 +175,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
         }
         case 1: {
             if (error || !result) {
-                if (error) DEBUG_DEBUG("Failed to get ChangePlatformProfileOnBattery: %s", error->message);
-                else DEBUG_DEBUG("No result for ChangePlatformProfileOnBattery");
+                if (error) DEBUG_TRACE("Failed to get ChangePlatformProfileOnBattery: %s", error->message);
+                else DEBUG_TRACE("No result for ChangePlatformProfileOnBattery");
                 if (error) g_error_free(error);
                 plugin->auto_switch_battery_enabled = FALSE;
                 if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_battery && !plugin->dialog_state->dirty_battery_enabled)
@@ -194,7 +194,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         gboolean battery_enabled;
                         g_variant_get(value, "b", &battery_enabled);
                         plugin->auto_switch_battery_enabled = battery_enabled;
-                        DEBUG_DEBUG("ChangePlatformProfileOnBattery = %d", battery_enabled);
+                        DEBUG_TRACE("ChangePlatformProfileOnBattery = %d", battery_enabled);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->check_battery && !plugin->dialog_state->dirty_battery_enabled)
                             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->check_battery), battery_enabled);
                     }
@@ -219,8 +219,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             }
             
             if (error || !result) {
-                if (error) DEBUG_DEBUG("Failed to get PlatformProfileOnAc: %s", error->message);
-                else DEBUG_DEBUG("No result for PlatformProfileOnAc");
+                if (error) DEBUG_TRACE("Failed to get PlatformProfileOnAc: %s", error->message);
+                else DEBUG_TRACE("No result for PlatformProfileOnAc");
                 if (error) g_error_free(error);
                 g_free(plugin->auto_switch_ac_profile);
                 plugin->auto_switch_ac_profile = g_strdup(default_profile);
@@ -239,7 +239,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         const gchar *name = profile_name_from_enum(plugin, enum_val);
                         g_free(plugin->auto_switch_ac_profile);
                         plugin->auto_switch_ac_profile = g_strdup(name);
-                        DEBUG_DEBUG("PlatformProfileOnAc = %s", name);
+                        DEBUG_TRACE("PlatformProfileOnAc = %s", name);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->combo_ac && !plugin->dialog_state->dirty_ac_profile) {
                             GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_ac));
                             if (model) {
@@ -281,8 +281,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             }
             
             if (error || !result) {
-                if (error) DEBUG_DEBUG("Failed to get PlatformProfileOnBattery: %s", error->message);
-                else DEBUG_DEBUG("No result for PlatformProfileOnBattery");
+                if (error) DEBUG_TRACE("Failed to get PlatformProfileOnBattery: %s", error->message);
+                else DEBUG_TRACE("No result for PlatformProfileOnBattery");
                 if (error) g_error_free(error);
                 g_free(plugin->auto_switch_battery_profile);
                 plugin->auto_switch_battery_profile = g_strdup(default_profile);
@@ -301,7 +301,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         const gchar *name = profile_name_from_enum(plugin, enum_val);
                         g_free(plugin->auto_switch_battery_profile);
                         plugin->auto_switch_battery_profile = g_strdup(name);
-                        DEBUG_DEBUG("PlatformProfileOnBattery = %s", name);
+                        DEBUG_TRACE("PlatformProfileOnBattery = %s", name);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->combo_battery && !plugin->dialog_state->dirty_battery_profile) {
                             GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_battery));
                             if (model) {
@@ -337,8 +337,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
         }
         case 4: {
             if (error || !result) {
-                if (error) DEBUG_DEBUG("Failed to get ChargeControlEndThreshold: %s", error->message);
-                else DEBUG_DEBUG("No result for ChargeControlEndThreshold");
+                if (error) DEBUG_TRACE("Failed to get ChargeControlEndThreshold: %s", error->message);
+                else DEBUG_TRACE("No result for ChargeControlEndThreshold");
                 if (error) g_error_free(error);
                 plugin->current_battery_limit = 100;
                 plugin->battery_limit_enabled = FALSE;
@@ -358,7 +358,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         g_variant_get(value, "y", &limit);
                         plugin->current_battery_limit = limit;
                         plugin->battery_limit_enabled = (limit == 80);
-                        DEBUG_DEBUG("ChargeControlEndThreshold = %d", limit);
+                        DEBUG_TRACE("ChargeControlEndThreshold = %d", limit);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->limit_check && !plugin->dialog_state->dirty_limit)
                             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->limit_check), (limit == 80));
                     }
@@ -370,7 +370,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = FALSE;
             
-            DEBUG_DEBUG("Dialog settings loaded completely");
+            DEBUG_TRACE("Dialog settings loaded completely");
             async_call_context_free(ctx);
             g_object_unref(plugin);
             return;
@@ -388,13 +388,13 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
     if (plugin->settings_dialog_open && plugin->dialog_state && plugin->dialog_state->dialog) {
-        DEBUG_DEBUG("create_settings_dialog: dialog already open");
+        DEBUG_TRACE("create_settings_dialog: dialog already open");
         gtk_window_present(GTK_WINDOW(plugin->dialog_state->dialog));
         return;
     }
     
     if (plugin->dialog_state) {
-        DEBUG_DEBUG("create_settings_dialog: cleaning up stale dialog_state");
+        DEBUG_TRACE("create_settings_dialog: cleaning up stale dialog_state");
         g_free(plugin->dialog_state);
         plugin->dialog_state = NULL;
     }
@@ -437,7 +437,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     GtkWidget *separator;
     int row = 0;
     
-    DEBUG_DEBUG("=== create_settings_dialog: OPENING ===");
+    DEBUG_TRACE("=== create_settings_dialog: OPENING ===");
     plugin->settings_dialog_open = TRUE;
     plugin->saving_settings = FALSE;
     
@@ -450,12 +450,12 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     settings_dialog_reset_dirty(plugin);
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        DEBUG_DEBUG("create_settings_dialog: No profiles loaded, creating fallback");
+        DEBUG_TRACE("create_settings_dialog: No profiles loaded, creating fallback");
         create_fallback_profiles(plugin);
     }
     
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        DEBUG_DEBUG("ASUSD not available, trying to initialize...");
+        DEBUG_TRACE("ASUSD not available, trying to initialize...");
         asusd_init_async(plugin);
     }
     
@@ -670,20 +670,20 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     gtk_widget_show_all(dialog);
     
     settings_dialog_sync_from_asusd(plugin, FALSE);
-    DEBUG_DEBUG("=== create_settings_dialog: DIALOG SHOWN ===");
+    DEBUG_TRACE("=== create_settings_dialog: DIALOG SHOWN ===");
 }
 
 /* ========== Callbacks диалога ========== */
 
 void on_close_button_clicked(GtkButton *button, GtkWidget *dialog) {
-    DEBUG_DEBUG("=== on_close_button_clicked: closing dialog ===");
+    DEBUG_TRACE("=== on_close_button_clicked: closing dialog ===");
     gtk_widget_destroy(dialog);
 }
 
 void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
-    DEBUG_DEBUG("on_dialog_destroy: settings dialog closed");
+    DEBUG_TRACE("on_dialog_destroy: settings dialog closed");
     
     if (plugin->settings_dialog_open) {
         plugin->settings_dialog_open = FALSE;
@@ -699,14 +699,14 @@ void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->dialog_state || plugin->is_disposing) return;
     if (plugin->dialog_state->syncing_ui) return;
-    if (!plugin->settings_dialog_open) { DEBUG_DEBUG("on_any_setting_changed: dialog is closed"); return; }
-    DEBUG_DEBUG("on_any_setting_changed: setting changed");
+    if (!plugin->settings_dialog_open) { DEBUG_TRACE("on_any_setting_changed: dialog is closed"); return; }
+    DEBUG_TRACE("on_any_setting_changed: setting changed");
     SettingsDialogState *state = plugin->dialog_state;
-    if (widget == state->check_ac) { state->dirty_ac_enabled = TRUE; DEBUG_DEBUG("  dirty_ac_enabled = TRUE"); }
-    else if (widget == state->check_battery) { state->dirty_battery_enabled = TRUE; DEBUG_DEBUG("  dirty_battery_enabled = TRUE"); }
-    else if (widget == state->combo_ac) { state->dirty_ac_profile = TRUE; DEBUG_DEBUG("  dirty_ac_profile = TRUE"); }
-    else if (widget == state->combo_battery) { state->dirty_battery_profile = TRUE; DEBUG_DEBUG("  dirty_battery_profile = TRUE"); }
-    else if (widget == state->limit_check) { state->dirty_limit = TRUE; DEBUG_DEBUG("  dirty_limit = TRUE"); }
+    if (widget == state->check_ac) { state->dirty_ac_enabled = TRUE; DEBUG_TRACE("  dirty_ac_enabled = TRUE"); }
+    else if (widget == state->check_battery) { state->dirty_battery_enabled = TRUE; DEBUG_TRACE("  dirty_battery_enabled = TRUE"); }
+    else if (widget == state->combo_ac) { state->dirty_ac_profile = TRUE; DEBUG_TRACE("  dirty_ac_profile = TRUE"); }
+    else if (widget == state->combo_battery) { state->dirty_battery_profile = TRUE; DEBUG_TRACE("  dirty_battery_profile = TRUE"); }
+    else if (widget == state->limit_check) { state->dirty_limit = TRUE; DEBUG_TRACE("  dirty_limit = TRUE"); }
 }
 
 void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
@@ -762,7 +762,7 @@ void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog) {
     if (response == GTK_RESPONSE_YES) {
         if (!plugin->asusd_proxy) { DEBUG_WARN("ASUSD proxy not available"); return; }
         if (limit_enabled_in_dialog) {
-            DEBUG_DEBUG("on_one_shot_clicked: applying 80%% limit before one-shot");
+            DEBUG_TRACE("on_one_shot_clicked: applying 80%% limit before one-shot");
             asusd_set_property_async(plugin, "ChargeControlEndThreshold", g_variant_new_byte(80), NULL, NULL);
         }
         asusd_call_async(plugin, "OneShotFullCharge", NULL, (GAsyncReadyCallback)on_one_shot_done, plugin);
@@ -774,7 +774,7 @@ void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog) {
 void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->settings_dialog_open || plugin->is_disposing) return;
     
-    DEBUG_DEBUG("=== on_apply_clicked: Apply button clicked ===");
+    DEBUG_TRACE("=== on_apply_clicked: Apply button clicked ===");
     
     GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(button)));
     if (!dialog) return;
@@ -792,7 +792,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (hide_changed) update_profile_display(plugin, FALSE);
     
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        DEBUG_DEBUG("  ASUSD not available, cannot apply settings");
+        DEBUG_TRACE("  ASUSD not available, cannot apply settings");
         if (!plugin->hide_notifications)
             send_notification(_("Error"), _("ASUSD is not available. Cannot apply settings."), TRUE, "emblem-readonly");
         save_settings(plugin);
@@ -839,7 +839,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (ctx->new_limit != plugin->current_battery_limit) ctx->total_steps++;
     
     if (ctx->total_steps == 0) {
-        DEBUG_DEBUG("  No ASUSD changes detected");
+        DEBUG_TRACE("  No ASUSD changes detected");
         save_settings(plugin);
         settings_dialog_reset_dirty(plugin);
         if (!plugin->hide_notifications)
@@ -852,7 +852,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         return;
     }
     
-    DEBUG_DEBUG("  Starting apply with %d steps", ctx->total_steps);
+    DEBUG_TRACE("  Starting apply with %d steps", ctx->total_steps);
     apply_next_setting(ctx);
 }
 
@@ -861,7 +861,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     
     AsusdBatteryPlugin *plugin = ctx->plugin;
     if (!plugin || plugin->is_disposing) {
-        DEBUG_DEBUG("apply_next_setting: plugin destroyed or disposing, aborting");
+        DEBUG_TRACE("apply_next_setting: plugin destroyed or disposing, aborting");
         g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
         if (ctx->error_messages) g_strfreev(ctx->error_messages);
         g_free(ctx);
@@ -872,7 +872,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
         on_settings_apply_complete(ctx);
         return;
     }
-    DEBUG_DEBUG("  Applying step %d/%d", ctx->current_step + 1, ctx->total_steps);
+    DEBUG_TRACE("  Applying step %d/%d", ctx->current_step + 1, ctx->total_steps);
     
     int step = ctx->current_step;
     int applied = 0;
@@ -941,7 +941,7 @@ void on_settings_apply_step_done(GObject *source, GAsyncResult *res, gpointer us
     
     AsusdBatteryPlugin *plugin = ctx->plugin;
     if (!plugin || plugin->is_disposing) {
-        DEBUG_DEBUG("on_settings_apply_step_done: plugin destroyed or disposing");
+        DEBUG_TRACE("on_settings_apply_step_done: plugin destroyed or disposing");
         g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
         if (ctx->error_messages) g_strfreev(ctx->error_messages);
         g_free(ctx);
@@ -993,7 +993,7 @@ void on_settings_apply_complete(SettingsApplyContext *ctx) {
             plugin->current_battery_limit = ctx->new_limit;
             settings_dialog_reset_dirty(plugin);
             save_settings(plugin);
-            DEBUG_DEBUG("  Changes applied successfully");
+            DEBUG_TRACE("  Changes applied successfully");
             if (!plugin->hide_notifications)
                 send_notification(_("Settings applied"), _("Power profile settings have been updated"), FALSE, "emblem-system");
         }
@@ -1002,7 +1002,7 @@ void on_settings_apply_complete(SettingsApplyContext *ctx) {
             settings_dialog_update_ui(plugin);
         }
     } else {
-        DEBUG_DEBUG("on_settings_apply_complete: plugin destroyed or disposing, skipping UI updates");
+        DEBUG_TRACE("on_settings_apply_complete: plugin destroyed or disposing, skipping UI updates");
     }
     
     if (plugin) {

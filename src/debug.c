@@ -10,8 +10,22 @@
 #include <sys/time.h>
 
 DebugLevel g_debug_level = DEBUG_LEVEL_NONE;
+static gboolean debug_warning_shown = FALSE;
 
 void debug_init(void) {
+    /* Проверяем, включен ли G_MESSAGES_DEBUG=all, но XFCE4_ASUSD_DEBUG не задан */
+    const char *g_messages = g_getenv("G_MESSAGES_DEBUG");
+    const char *env = g_getenv("XFCE4_ASUSD_DEBUG");
+    gboolean g_messages_all = (g_messages && (g_strcmp0(g_messages, "all") == 0 || 
+                                               strstr(g_messages, "all") != NULL));
+    
+    if (g_messages_all && (!env || g_strcmp0(env, "") == 0 || env[0] == '\0')) {
+        if (!debug_warning_shown) {
+            g_printerr("\nXFCE4-ASUSD-BATTERY: If you want xfce4-asusd-battery plugin to print debug, also set XFCE4_ASUSD_DEBUG to DEBUG or TRACE\n");
+            debug_warning_shown = TRUE;
+        }
+    }
+    
     debug_set_level_from_env();
 }
 
