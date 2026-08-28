@@ -27,4 +27,4 @@ Comment[zh_CN]=通过asusd管理华硕笔记本电脑电源配置文件
 Icon=battery-good-symbolic
 X-XFCE-API=2.0
 X-XFCE-Plugin-API=2.0
-X-XFCE-Module=libxfce4_asusd_battery.so
+X-XFCE-Module=libxfce4-asusd-battery.so
