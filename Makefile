@@ -11,7 +11,7 @@ CFLAGS = -Wall -O2 -fPIC `pkg-config --cflags $(PKG_DEPS)` \
 LDFLAGS = -shared `pkg-config --libs $(PKG_DEPS)`
 TARGET = libxfce4-asusd-battery.so
 PLUGIN_NAME = xfce4-asusd-battery
-SOURCES = src/main.c src/utils.c src/profile-manager.c src/asusd-client.c src/settings-dialog.c
+SOURCES = src/main.c src/utils.c src/profile-manager.c src/asusd-client.c src/settings-dialog.c src/debug.c
 
 # ========== Определение дистрибутива и путей ==========
 DISTRO := $(shell grep -oP '^ID=\K\w+' /etc/os-release 2>/dev/null || echo "unknown")

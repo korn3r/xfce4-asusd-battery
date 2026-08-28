@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "debug.h"
 
 AsusdBatteryPlugin* get_plugin_ref(gpointer user_data) {
     if (!user_data) return NULL;

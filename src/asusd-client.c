@@ -4,6 +4,7 @@
 #include "plugin.h"
 #include "settings-dialog.h"
 #include "config.h"
+#include "debug.h"
 
 #include <gio/gio.h>
 
@@ -17,7 +18,7 @@
 
 void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
-    g_debug("ASUSD: Creating proxy asynchronously");
+    DEBUG_DEBUG("ASUSD: Creating proxy asynchronously");
     
     g_dbus_proxy_new_for_bus(
         G_BUS_TYPE_SYSTEM,
@@ -35,14 +36,14 @@ void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
 void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin) {
-        g_debug("ASUSD: Plugin destroyed, discarding proxy callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding proxy callback");
         return;
     }
     
     GError *error = NULL;
     plugin->asusd_proxy = g_dbus_proxy_new_for_bus_finish(res, &error);
     if (error) {
-        g_warning("ASUSD: Failed to create proxy: %s", error->message);
+        DEBUG_WARN("ASUSD: Failed to create proxy: %s", error->message);
         g_error_free(error);
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         if (plugin->asusd_retry_timeout_id == 0 && !plugin->is_disposing)
@@ -51,13 +52,13 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
         return;
     }
     if (!plugin->asusd_proxy) {
-        g_warning("ASUSD: Proxy creation returned NULL");
+        DEBUG_WARN("ASUSD: Proxy creation returned NULL");
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         g_object_unref(plugin);
         return;
     }
     
-    g_debug("ASUSD: Proxy created successfully");
+    DEBUG_DEBUG("ASUSD: Proxy created successfully");
     plugin->connection = g_dbus_proxy_get_connection(plugin->asusd_proxy);
     if (plugin->connection) g_object_ref(plugin->connection);
     
@@ -65,18 +66,18 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
                     G_CALLBACK(on_proxy_properties_changed), plugin);
     
     gchar *owner = g_dbus_proxy_get_name_owner(plugin->asusd_proxy);
-    g_debug("ASUSD: Current name owner = %s", owner ? owner : "NULL");
+    DEBUG_DEBUG("ASUSD: Current name owner = %s", owner ? owner : "NULL");
     
     if (owner) {
         g_free(owner);
-        g_debug("ASUSD: Owner exists, loading initial data...");
+        DEBUG_DEBUG("ASUSD: Owner exists, loading initial data...");
         plugin->asusd_state = ASUSD_STATE_AVAILABLE;
         plugin->init_load_state = 0;
         asusd_get_property_async(plugin, "PlatformProfileChoices",
                                 (GAsyncReadyCallback)on_profile_choices_loaded, plugin);
     } else {
         g_free(owner);
-        g_debug("ASUSD: No owner yet, will retry");
+        DEBUG_DEBUG("ASUSD: No owner yet, will retry");
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         create_fallback_profiles(plugin);
         if (plugin->asusd_retry_timeout_id == 0 && !plugin->is_disposing)
@@ -88,7 +89,7 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
 
 void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
-    g_debug("UPower: Creating proxy asynchronously");
+    DEBUG_DEBUG("UPower: Creating proxy asynchronously");
     g_dbus_proxy_new_for_bus(
         G_BUS_TYPE_SYSTEM,
         G_DBUS_PROXY_FLAGS_NONE,
@@ -105,19 +106,19 @@ void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
 void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin) {
-        g_debug("UPower: Plugin destroyed, discarding proxy callback");
+        DEBUG_DEBUG("UPower: Plugin destroyed, discarding proxy callback");
         return;
     }
     
     GError *error = NULL;
     plugin->upower_proxy = g_dbus_proxy_new_for_bus_finish(res, &error);
     if (error) {
-        g_warning("UPower: Failed to create proxy: %s", error->message);
+        DEBUG_WARN("UPower: Failed to create proxy: %s", error->message);
         g_error_free(error);
         g_object_unref(plugin);
         return;
     }
-    g_debug("UPower: Proxy created successfully");
+    DEBUG_DEBUG("UPower: Proxy created successfully");
     g_signal_connect(plugin->upower_proxy, "g-properties-changed",
                     G_CALLBACK(on_proxy_properties_changed), plugin);
     
@@ -137,21 +138,21 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
     }
     
     if (plugin->saving_settings) {
-        g_debug("on_proxy_properties_changed: saving_settings in progress, skipping UI updates");
+        DEBUG_DEBUG("on_proxy_properties_changed: saving_settings in progress, skipping UI updates");
         g_object_unref(plugin);
         return;
     }
     
-    g_debug("=== on_proxy_properties_changed ===");
+    DEBUG_DEBUG("=== on_proxy_properties_changed ===");
     
     if (proxy == plugin->asusd_proxy) {
-        g_debug("  From ASUSD proxy");
+        DEBUG_DEBUG("  From ASUSD proxy");
         GVariantIter iter;
         gchar *key;
         GVariant *value;
         g_variant_iter_init(&iter, changed_properties);
         while (g_variant_iter_next(&iter, "{sv}", &key, &value)) {
-            g_debug("  changed property: %s", key);
+            DEBUG_DEBUG("  changed property: %s", key);
             if (g_strcmp0(key, "PlatformProfile") == 0) {
                 guint32 enum_val;
                 g_variant_get(value, "u", &enum_val);
@@ -243,14 +244,14 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
             g_variant_unref(value);
         }
     } else if (proxy == plugin->upower_proxy) {
-        g_debug("  From UPower proxy");
+        DEBUG_DEBUG("  From UPower proxy");
         GVariantDict dict;
         g_variant_dict_init(&dict, changed_properties);
         GVariant *value = g_variant_dict_lookup_value(&dict, "OnBattery", NULL);
         if (value) {
             gboolean on_battery = g_variant_get_boolean(value);
             plugin->is_on_ac = !on_battery;
-            g_debug("  OnBattery = %d, is_on_ac = %d", on_battery, plugin->is_on_ac);
+            DEBUG_DEBUG("  OnBattery = %d, is_on_ac = %d", on_battery, plugin->is_on_ac);
             g_variant_unref(value);
         }
         g_variant_dict_clear(&dict);
@@ -303,9 +304,9 @@ void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
 void process_next_operation(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (g_queue_is_empty(plugin->operation_queue)) { plugin->processing_ops = FALSE; return; }
-    if (!plugin->asusd_proxy) { g_debug("ASUSD: Proxy not available"); plugin->processing_ops = FALSE; return; }
+    if (!plugin->asusd_proxy) { DEBUG_DEBUG("ASUSD: Proxy not available"); plugin->processing_ops = FALSE; return; }
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        g_debug("ASUSD: Not available (state=%d)", plugin->asusd_state);
+        DEBUG_DEBUG("ASUSD: Not available (state=%d)", plugin->asusd_state);
         plugin->processing_ops = FALSE;
         if (plugin->asusd_retry_timeout_id == 0)
             plugin->asusd_retry_timeout_id = g_timeout_add_seconds(2, asusd_retry_init, plugin);
@@ -318,10 +319,10 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
     plugin->processing_ops = TRUE;
     plugin->pending_calls++;
     
-    g_debug("ASUSD: Processing operation: %s", ctx->method_name);
+    DEBUG_DEBUG("ASUSD: Processing operation: %s", ctx->method_name);
     if (ctx->value) {
         gchar *params_str = g_variant_print(ctx->value, TRUE);
-        g_debug("ASUSD: Params: %s", params_str);
+        DEBUG_DEBUG("ASUSD: Params: %s", params_str);
         g_free(params_str);
     }
     
@@ -343,7 +344,7 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     
     AsusdBatteryPlugin *plugin = async_call_context_get_plugin_ref(ctx);
     if (!plugin || plugin->is_disposing) {
-        g_debug("ASUSD: Plugin destroyed or disposing, discarding callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed or disposing, discarding callback");
         if (plugin) g_object_unref(plugin);
         async_call_context_free(ctx);
         return;
@@ -356,7 +357,7 @@ void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data
     GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
     
     if (error) {
-        g_warning("ASUSD: Operation failed: %s", error->message);
+        DEBUG_WARN("ASUSD: Operation failed: %s", error->message);
         if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
             callback(source, res, ctx->user_data);
@@ -385,7 +386,7 @@ void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
                       gpointer user_data) {
     if (!plugin || plugin->is_disposing) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        g_debug("ASUSD: Call %s queued (state=%d)", method, plugin->asusd_state);
+        DEBUG_DEBUG("ASUSD: Call %s queued (state=%d)", method, plugin->asusd_state);
     }
     asusd_queue_operation(plugin, method, parameters, callback, user_data);
 }
@@ -395,10 +396,10 @@ void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
 void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
                               GAsyncReadyCallback callback, gpointer user_data) {
     if (!plugin || !property || plugin->is_disposing) return;
-    g_debug("ASUSD: Getting property: %s", property);
+    DEBUG_DEBUG("ASUSD: Getting property: %s", property);
     
     if (!plugin->connection) {
-        g_warning("ASUSD: No connection available");
+        DEBUG_WARN("ASUSD: No connection available");
         return;
     }
     
@@ -424,7 +425,7 @@ void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *property,
                               gpointer user_data) {
     if (!plugin || !property || !value || plugin->is_disposing) return;
     if (!plugin->connection) {
-        g_warning("ASUSD: No connection available");
+        DEBUG_WARN("ASUSD: No connection available");
         return;
     }
     
@@ -451,7 +452,7 @@ void asusd_set_profile_async(AsusdBatteryPlugin *plugin, const gchar *profile_na
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
     guint32 enum_val = 999;
     if (!profile_enum_from_name(plugin, profile_name, &enum_val)) {
-        g_warning("ASUSD: Profile %s not found", profile_name);
+        DEBUG_WARN("ASUSD: Profile %s not found", profile_name);
         return;
     }
     asusd_set_property_async(plugin, "PlatformProfile", g_variant_new_uint32(enum_val), callback, user_data);
@@ -464,12 +465,12 @@ gboolean asusd_retry_init(gpointer user_data) {
     if (!plugin || plugin->is_disposing) return G_SOURCE_REMOVE;
     
     plugin->asusd_retry_timeout_id = 0;
-    g_debug("ASUSD: Retry init attempt %d", plugin->asusd_init_retry_count + 1);
+    DEBUG_DEBUG("ASUSD: Retry init attempt %d", plugin->asusd_init_retry_count + 1);
     plugin->asusd_init_retry_count++;
     if (plugin->asusd_proxy) {
         gchar *owner = g_dbus_proxy_get_name_owner(plugin->asusd_proxy);
         if (owner) {
-            g_debug("ASUSD: Owner found on retry: %s", owner);
+            DEBUG_DEBUG("ASUSD: Owner found on retry: %s", owner);
             g_free(owner);
             plugin->asusd_state = ASUSD_STATE_AVAILABLE;
             asusd_get_property_async(plugin, "PlatformProfileChoices",
@@ -486,9 +487,9 @@ gboolean asusd_retry_init(gpointer user_data) {
 
 void asusd_init_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
-    g_debug("ASUSD: Initializing asynchronously...");
+    DEBUG_DEBUG("ASUSD: Initializing asynchronously...");
     if (plugin->asusd_proxy) {
-        g_debug("ASUSD: Cleaning up old proxy");
+        DEBUG_DEBUG("ASUSD: Cleaning up old proxy");
         g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin);
         g_clear_object(&plugin->asusd_proxy);
         g_clear_object(&plugin->connection);
@@ -513,7 +514,7 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
 void asusd_cleanup(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     
-    g_debug("ASUSD: Cleaning up");
+    DEBUG_DEBUG("ASUSD: Cleaning up");
     
     if (plugin->cancellable) {
         g_cancellable_cancel(plugin->cancellable);
@@ -557,14 +558,14 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding profile choices callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding profile choices callback");
         return;
     }
     
     GError *error = NULL;
     
     if (plugin->profiles && plugin->profiles->len > 0) {
-        g_debug("ASUSD: Profiles already loaded, skipping");
+        DEBUG_DEBUG("ASUSD: Profiles already loaded, skipping");
         g_object_unref(plugin);
         return;
     }
@@ -572,14 +573,14 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
         if (g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD)) {
-            g_warning("ASUSD: PlatformProfileChoices not supported, using fallback");
+            DEBUG_WARN("ASUSD: PlatformProfileChoices not supported, using fallback");
             g_error_free(error);
             create_fallback_profiles(plugin);
             asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
             g_object_unref(plugin);
             return;
         }
-        g_warning("ASUSD: Failed to get PlatformProfileChoices: %s", error->message);
+        DEBUG_WARN("ASUSD: Failed to get PlatformProfileChoices: %s", error->message);
         g_error_free(error);
         plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
         if (plugin->asusd_retry_timeout_id == 0 && !plugin->is_disposing)
@@ -588,7 +589,7 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
         return;
     }
     if (!result) {
-        g_warning("ASUSD: No result for PlatformProfileChoices");
+        DEBUG_WARN("ASUSD: No result for PlatformProfileChoices");
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
         g_object_unref(plugin);
@@ -599,7 +600,7 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     g_variant_get(result, "(v)", &value);
     g_variant_unref(result);
     if (!value) {
-        g_warning("ASUSD: No value in PlatformProfileChoices");
+        DEBUG_WARN("ASUSD: No value in PlatformProfileChoices");
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
         g_object_unref(plugin);
@@ -611,7 +612,7 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
         value = inner;
     }
     if (!g_variant_is_of_type(value, G_VARIANT_TYPE_ARRAY)) {
-        g_warning("ASUSD: PlatformProfileChoices not array");
+        DEBUG_WARN("ASUSD: PlatformProfileChoices not array");
         g_variant_unref(value);
         create_fallback_profiles(plugin);
         asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
@@ -637,14 +638,14 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding current profile callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding current profile callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: PlatformProfile query failed: %s", error->message);
+        DEBUG_DEBUG("ASUSD: PlatformProfile query failed: %s", error->message);
         g_error_free(error);
         if (!plugin->current_profile || g_strcmp0(plugin->current_profile, "unknown") == 0) {
             g_free(plugin->current_profile);
@@ -656,7 +657,7 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
         return;
     }
     if (!result) {
-        g_debug("ASUSD: No result for PlatformProfile");
+        DEBUG_DEBUG("ASUSD: No result for PlatformProfile");
         if (!plugin->current_profile || g_strcmp0(plugin->current_profile, "unknown") == 0) {
             g_free(plugin->current_profile);
             plugin->current_profile = g_strdup("balanced");
@@ -671,7 +672,7 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     g_variant_get(result, "(v)", &value);
     g_variant_unref(result);
     if (!value) {
-        g_debug("ASUSD: No value in PlatformProfile");
+        DEBUG_DEBUG("ASUSD: No value in PlatformProfile");
         if (!plugin->current_profile || g_strcmp0(plugin->current_profile, "unknown") == 0) {
             g_free(plugin->current_profile);
             plugin->current_profile = g_strdup("balanced");
@@ -687,7 +688,7 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
         value = inner;
     }
     if (!g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32)) {
-        g_warning("ASUSD: PlatformProfile not uint32");
+        DEBUG_WARN("ASUSD: PlatformProfile not uint32");
         g_variant_unref(value);
         if (!plugin->current_profile || g_strcmp0(plugin->current_profile, "unknown") == 0) {
             g_free(plugin->current_profile);
@@ -718,14 +719,14 @@ void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding limit callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding limit callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: Failed to get ChargeControlEndThreshold: %s", error->message);
+        DEBUG_DEBUG("ASUSD: Failed to get ChargeControlEndThreshold: %s", error->message);
         g_error_free(error);
     } else if (result) {
         GVariant *value = NULL;
@@ -742,7 +743,7 @@ void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
                 g_variant_get(value, "y", &limit);
                 plugin->current_battery_limit = limit;
                 plugin->battery_limit_enabled = (limit == 80);
-                g_debug("ASUSD: ChargeControlEndThreshold = %d", limit);
+                DEBUG_DEBUG("ASUSD: ChargeControlEndThreshold = %d", limit);
             }
             g_variant_unref(value);
         }
@@ -755,14 +756,14 @@ void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data)
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding ac switch callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding ac switch callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: Failed to get ChangePlatformProfileOnAc: %s", error->message);
+        DEBUG_DEBUG("ASUSD: Failed to get ChangePlatformProfileOnAc: %s", error->message);
         g_error_free(error);
     } else if (result) {
         GVariant *value = NULL;
@@ -776,7 +777,7 @@ void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data)
             }
             if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
                 g_variant_get(value, "b", &plugin->auto_switch_ac_enabled);
-                g_debug("ASUSD: ChangePlatformProfileOnAc = %d", plugin->auto_switch_ac_enabled);
+                DEBUG_DEBUG("ASUSD: ChangePlatformProfileOnAc = %d", plugin->auto_switch_ac_enabled);
             }
             g_variant_unref(value);
         }
@@ -789,14 +790,14 @@ void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding ac profile callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding ac profile callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: Failed to get PlatformProfileOnAc: %s", error->message);
+        DEBUG_DEBUG("ASUSD: Failed to get PlatformProfileOnAc: %s", error->message);
         g_error_free(error);
     } else if (result) {
         GVariant *value = NULL;
@@ -814,7 +815,7 @@ void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data
                 const gchar *name = profile_name_from_enum(plugin, enum_val);
                 g_free(plugin->auto_switch_ac_profile);
                 plugin->auto_switch_ac_profile = g_strdup(name);
-                g_debug("ASUSD: PlatformProfileOnAc = %s", name);
+                DEBUG_DEBUG("ASUSD: PlatformProfileOnAc = %s", name);
             }
             g_variant_unref(value);
         }
@@ -827,14 +828,14 @@ void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding battery switch callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding battery switch callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: Failed to get ChangePlatformProfileOnBattery: %s", error->message);
+        DEBUG_DEBUG("ASUSD: Failed to get ChangePlatformProfileOnBattery: %s", error->message);
         g_error_free(error);
     } else if (result) {
         GVariant *value = NULL;
@@ -848,7 +849,7 @@ void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_
             }
             if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
                 g_variant_get(value, "b", &plugin->auto_switch_battery_enabled);
-                g_debug("ASUSD: ChangePlatformProfileOnBattery = %d", plugin->auto_switch_battery_enabled);
+                DEBUG_DEBUG("ASUSD: ChangePlatformProfileOnBattery = %d", plugin->auto_switch_battery_enabled);
             }
             g_variant_unref(value);
         }
@@ -861,14 +862,14 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
         if (plugin) g_object_unref(plugin);
-        g_debug("ASUSD: Plugin destroyed, discarding battery profile callback");
+        DEBUG_DEBUG("ASUSD: Plugin destroyed, discarding battery profile callback");
         return;
     }
     
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_debug("ASUSD: Failed to get PlatformProfileOnBattery: %s", error->message);
+        DEBUG_DEBUG("ASUSD: Failed to get PlatformProfileOnBattery: %s", error->message);
         g_error_free(error);
     } else if (result) {
         GVariant *value = NULL;
@@ -886,21 +887,21 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
                 const gchar *name = profile_name_from_enum(plugin, enum_val);
                 g_free(plugin->auto_switch_battery_profile);
                 plugin->auto_switch_battery_profile = g_strdup(name);
-                g_debug("ASUSD: PlatformProfileOnBattery = %s", name);
+                DEBUG_DEBUG("ASUSD: PlatformProfileOnBattery = %s", name);
             }
             g_variant_unref(value);
         }
     }
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        g_debug("ASUSD: No profiles loaded after init, creating fallback");
+        DEBUG_DEBUG("ASUSD: No profiles loaded after init, creating fallback");
         create_fallback_profiles(plugin);
     }
     
     plugin->asusd_state = ASUSD_STATE_AVAILABLE;
     plugin->asusd_init_retry_count = 0;
     update_profile_display(plugin, FALSE);
-    g_debug("ASUSD: Async initialization completed");
+    DEBUG_DEBUG("ASUSD: Async initialization completed");
     if (plugin->dialog_state && plugin->dialog_state->dialog)
         settings_dialog_sync_from_asusd(plugin, FALSE);
     
@@ -919,7 +920,7 @@ void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data) {
     GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
     if (error) {
         gchar *error_message = g_strdup(error->message);
-        g_warning("Failed to call OneShotFullCharge: %s", error_message);
+        DEBUG_WARN("Failed to call OneShotFullCharge: %s", error_message);
         g_error_free(error);
         if (!plugin->hide_notifications)
             send_notification(_("Error"), _("Failed to start one-shot full charge"), TRUE, "dialog-error");

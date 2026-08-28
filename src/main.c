@@ -9,6 +9,7 @@
 #include <libxfce4panel/libxfce4panel.h>
 #include <libxfce4util/libxfce4util.h>
 #include <xfconf/xfconf.h>
+#include "debug.h"
 
 /* ========== GObject определения ========== */
 
@@ -20,7 +21,7 @@ static void asusd_battery_plugin_dispose(GObject *object) {
     if (plugin->is_disposing) return;
     plugin->is_disposing = TRUE;
     
-    g_debug("AsusdBatteryPlugin: dispose");
+    DEBUG_DEBUG("AsusdBatteryPlugin: dispose");
     
     asusd_cleanup(plugin);
     
@@ -30,7 +31,7 @@ static void asusd_battery_plugin_dispose(GObject *object) {
 static void asusd_battery_plugin_finalize(GObject *object) {
     AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
     
-    g_debug("AsusdBatteryPlugin: finalize");
+    DEBUG_DEBUG("AsusdBatteryPlugin: finalize");
     
     g_free(plugin->current_profile);
     g_free(plugin->auto_switch_ac_profile);
@@ -91,21 +92,21 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     if (!plugin || plugin->is_disposing) return;
     
     if (!plugin->profiles || plugin->profiles->len == 0) {
-        g_debug("update_profile_display: No profiles loaded, creating fallback");
+        DEBUG_DEBUG("update_profile_display: No profiles loaded, creating fallback");
         create_fallback_profiles(plugin);
     }
     
     const gchar *profile = plugin->current_profile ? plugin->current_profile : "balanced";
     if (g_strcmp0(profile, "unknown") == 0) {
         profile = "balanced";
-        g_debug("update_profile_display: profile was 'unknown', using 'balanced'");
+        DEBUG_DEBUG("update_profile_display: profile was 'unknown', using 'balanced'");
     }
     
-    g_debug("=== update_profile_display ===");
-    g_debug("  should_notify = %d", should_notify);
-    g_debug("  hide_notifications = %d", plugin->hide_notifications);
-    g_debug("  profile = '%s'", profile);
-    g_debug("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
+    DEBUG_DEBUG("=== update_profile_display ===");
+    DEBUG_DEBUG("  should_notify = %d", should_notify);
+    DEBUG_DEBUG("  hide_notifications = %d", plugin->hide_notifications);
+    DEBUG_DEBUG("  profile = '%s'", profile);
+    DEBUG_DEBUG("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
     
     gboolean profile_changed = FALSE;
     if (should_notify && !plugin->hide_notifications && plugin->asusd_state == ASUSD_STATE_AVAILABLE) {
@@ -158,7 +159,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     }
     
     if (profile_changed && profile && g_strcmp0(profile, "unknown") != 0 && can_send_notification(plugin)) {
-        g_debug("  >>> SENDING NOTIFICATION for profile: %s", profile);
+        DEBUG_DEBUG("  >>> SENDING NOTIFICATION for profile: %s", profile);
         gchar *display_name = g_strdup(profile);
         if (display_name[0] >= 'a' && display_name[0] <= 'z') display_name[0] = g_ascii_toupper(display_name[0]);
         const gchar *icon = get_profile_icon(plugin, profile);
@@ -167,7 +168,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         g_free(subtitle);
         g_free(display_name);
     }
-    g_debug("=== end update_profile_display ===");
+    DEBUG_DEBUG("=== end update_profile_display ===");
 }
 
 /* ========== Настройки ========== */
@@ -175,7 +176,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
 void load_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { g_warning("Failed to get xfconf channel"); return; }
+    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
     plugin->hide_icon = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_icon", FALSE);
     plugin->hide_text = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_text", FALSE);
     plugin->hide_notifications = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_notifications", FALSE);
@@ -184,7 +185,7 @@ void load_settings(AsusdBatteryPlugin *plugin) {
 void save_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { g_warning("Failed to get xfconf channel"); return; }
+    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
     xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_icon", plugin->hide_icon);
     xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_text", plugin->hide_text);
     xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_notifications", plugin->hide_notifications);
@@ -287,7 +288,7 @@ void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data)
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
-        g_warning("Failed to set profile: %s", error->message);
+        DEBUG_WARN("Failed to set profile: %s", error->message);
         if (!plugin->hide_notifications)
             send_notification(_("Error changing profile"), _("Failed to set profile via ASUSD"), TRUE, "emblem-readonly");
         g_error_free(error);
@@ -295,7 +296,7 @@ void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data)
         return;
     }
     if (result) g_variant_unref(result);
-    g_debug("Profile set successfully, waiting for property change signal");
+    DEBUG_DEBUG("Profile set successfully, waiting for property change signal");
     g_object_unref(plugin);
 }
 
@@ -330,24 +331,28 @@ void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
 /* ========== Создание плагина ========== */
 
 void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
+    debug_init();
+    DEBUG_TRACE_ENTER();
+    DEBUG_INFO("Initializing ASUS Battery plugin v%s", VERSION);
+
     AsusdBatteryPlugin *plugin_data;
     GError *error = NULL;
     init_i18n();
     if (!xfconf_init(&error)) {
-        g_warning("Failed to initialize xfconf: %s", error ? error->message : "unknown");
+        DEBUG_WARN("Failed to initialize xfconf: %s", error ? error->message : "unknown");
         if (error) g_error_free(error);
         return;
     }
     
     plugin_data = g_object_new(ASUSD_TYPE_BATTERY_PLUGIN, NULL);
-    if (!plugin_data) { g_warning("Failed to allocate memory"); return; }
+    if (!plugin_data) { DEBUG_WARN("Failed to allocate memory"); return; }
     
     plugin_data->plugin = plugin;
     load_settings(plugin_data);
     create_fallback_profiles(plugin_data);
     
     plugin_data->button = gtk_button_new();
-    if (!plugin_data->button) { g_warning("Failed to create button"); g_object_unref(plugin_data); return; }
+    if (!plugin_data->button) { DEBUG_WARN("Failed to create button"); g_object_unref(plugin_data); return; }
     gtk_button_set_relief(GTK_BUTTON(plugin_data->button), GTK_RELIEF_NONE);
     gtk_widget_set_focus_on_click(plugin_data->button, FALSE);
     gtk_widget_set_tooltip_text(plugin_data->button, _("Manage performance profile"));
