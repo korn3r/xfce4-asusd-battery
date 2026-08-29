@@ -1,3 +1,4 @@
+/* src/settings-dialog.c */
 #include "settings-dialog.h"
 #include "utils.h"
 #include "profile-manager.h"
@@ -6,6 +7,23 @@
 #include "asusd-client.h"
 #include "debug.h"
 #include <libxfce4util/libxfce4util.h>
+
+/* ========== Forward declarations ========== */
+void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void apply_next_setting(SettingsApplyContext *ctx);
+void on_settings_apply_step_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_settings_apply_complete(SettingsApplyContext *ctx);
+gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id);
+
+/* ========== Реализация is_dialog_valid ========== */
+gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id) {
+    if (!plugin) return FALSE;
+    if (!plugin->dialog_state) return FALSE;
+    if (plugin->dialog_state->dialog_id != dialog_id) return FALSE;
+    if (!plugin->settings_dialog_open) return FALSE;
+    if (plugin->is_disposing) return FALSE;
+    return TRUE;
+}
 
 /* ========== Функции диалога настроек ========== */
 
@@ -121,15 +139,15 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     if (!plugin->dialog_state) {
         DEBUG_TRACE("on_dialog_property_loaded: dialog_state is NULL, discarding");
-        g_object_unref(plugin);
         async_call_context_free(ctx);
+        g_object_unref(plugin);
         return;
     }
     
     if (!is_dialog_valid(plugin, dialog_id)) {
         DEBUG_TRACE("on_dialog_property_loaded: dialog changed or destroyed (id %u)", dialog_id);
-        g_object_unref(plugin);
         async_call_context_free(ctx);
+        g_object_unref(plugin);
         return;
     }
     
@@ -170,8 +188,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 plugin->dialog_state->syncing_ui = TRUE;
             
             ctx->user_data = GINT_TO_POINTER(1);
-            asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
-                                    (GAsyncReadyCallback)on_dialog_property_loaded, ctx);
+            if (!asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
+                                          (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
+                DEBUG_TRACE("Failed to start async operation for ChangePlatformProfileOnBattery");
+                async_call_context_free(ctx);
+                g_object_unref(plugin);
+                return;
+            }
             break;
         }
         case 1: {
@@ -207,8 +230,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 plugin->dialog_state->syncing_ui = TRUE;
             
             ctx->user_data = GINT_TO_POINTER(2);
-            asusd_get_property_async(plugin, "PlatformProfileOnAc",
-                                    (GAsyncReadyCallback)on_dialog_property_loaded, ctx);
+            if (!asusd_get_property_async(plugin, "PlatformProfileOnAc",
+                                          (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
+                DEBUG_TRACE("Failed to start async operation for PlatformProfileOnAc");
+                async_call_context_free(ctx);
+                g_object_unref(plugin);
+                return;
+            }
             break;
         }
         case 2: {
@@ -268,8 +296,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 plugin->dialog_state->syncing_ui = TRUE;
             
             ctx->user_data = GINT_TO_POINTER(3);
-            asusd_get_property_async(plugin, "PlatformProfileOnBattery",
-                                    (GAsyncReadyCallback)on_dialog_property_loaded, ctx);
+            if (!asusd_get_property_async(plugin, "PlatformProfileOnBattery",
+                                          (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
+                DEBUG_TRACE("Failed to start async operation for PlatformProfileOnBattery");
+                async_call_context_free(ctx);
+                g_object_unref(plugin);
+                return;
+            }
             break;
         }
         case 3: {
@@ -329,8 +362,13 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 plugin->dialog_state->syncing_ui = TRUE;
             
             ctx->user_data = GINT_TO_POINTER(4);
-            asusd_get_property_async(plugin, "ChargeControlEndThreshold",
-                                    (GAsyncReadyCallback)on_dialog_property_loaded, ctx);
+            if (!asusd_get_property_async(plugin, "ChargeControlEndThreshold",
+                                          (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
+                DEBUG_TRACE("Failed to start async operation for ChargeControlEndThreshold");
+                async_call_context_free(ctx);
+                g_object_unref(plugin);
+                return;
+            }
             break;
         }
         case 4: {

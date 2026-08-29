@@ -1,16 +1,24 @@
 /* include/config.h */
-#ifndef __CONFIG_H__
-#define __CONFIG_H__
+#ifndef CONFIG_H
+#define CONFIG_H
 
-#include <libintl.h>
+/* ========== Package definitions ========== */
 
-#define GETTEXT_PACKAGE "xfce4-asusd-battery"
-#define LOCALEDIR "/usr/share/locale"
+#ifndef VERSION
 #define VERSION "1.0.0"
+#endif
 
-#define CONFIG_CHANNEL "xfce4-asusd-battery"
+#ifndef GETTEXT_PACKAGE
+#define GETTEXT_PACKAGE "xfce4-asusd-battery"
+#endif
 
-/* ВОЗВРАЩЕН СТАРЫЙ ПУТЬ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ */
+#ifndef LOCALEDIR
+#define LOCALEDIR "/usr/share/locale"
+#endif
+
+/* ========== Xfconf configuration ========== */
+
+#define CONFIG_CHANNEL "xfce4-panel"
 #define CONFIG_PROPERTY_PREFIX "/plugins/xfce4-asusd-battery"
 
-#endif /* __CONFIG_H__ */
+#endif /* CONFIG_H */

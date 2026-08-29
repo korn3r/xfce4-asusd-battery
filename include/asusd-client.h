@@ -1,28 +1,44 @@
 /* include/asusd-client.h */
-#ifndef __ASUSD_CLIENT_H__
-#define __ASUSD_CLIENT_H__
+#ifndef ASUSD_CLIENT_H
+#define ASUSD_CLIENT_H
 
-#include <glib-object.h>
+#include <glib.h>
 #include <gio/gio.h>
-#include <gtk/gtk.h>
+#include "plugin.h"
 
-G_BEGIN_DECLS
+/* ========== AsyncCallContext ========== */
 
-typedef struct _AsusdBatteryPlugin AsusdBatteryPlugin;
-typedef struct _AsyncCallContext AsyncCallContext;
+typedef struct AsyncCallContext {
+    GWeakRef plugin_ref;
+    char *method_name;
+    GVariant *value;
+    GAsyncReadyCallback callback;
+    gpointer user_data;
+    GDestroyNotify destroy_notify;
+    gint ref_count;
+    guint dialog_id;
+    gboolean is_dialog_callback;
+} AsyncCallContext;
 
-/* Proxy creation */
-void create_asusd_proxy_async(AsusdBatteryPlugin *plugin);
-void create_upower_proxy_async(AsusdBatteryPlugin *plugin);
+/* ========== AsyncCallContext API ========== */
 
-/* D-Bus operations */
+AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
+                                         const char *method_name,
+                                         GVariant *value,
+                                         GAsyncReadyCallback callback,
+                                         gpointer user_data,
+                                         GDestroyNotify destroy_notify);
+
+void async_call_context_free(AsyncCallContext *ctx);
+void async_call_context_ref(AsyncCallContext *ctx);
+void async_call_context_unref(AsyncCallContext *ctx);
+AsusdBatteryPlugin* async_call_context_get_plugin_ref(AsyncCallContext *ctx);
+
+/* ========== Public API ========== */
+
 void asusd_init_async(AsusdBatteryPlugin *plugin);
-void asusd_cleanup(AsusdBatteryPlugin *plugin);
-gboolean asusd_retry_init(gpointer user_data);
-
-/* Property operations */
-void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
-                              GAsyncReadyCallback callback, gpointer user_data);
+gboolean asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
+                                  GAsyncReadyCallback callback, gpointer user_data);
 void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *property,
                               GVariant *value, GAsyncReadyCallback callback,
                               gpointer user_data);
@@ -31,30 +47,13 @@ void asusd_set_profile_async(AsusdBatteryPlugin *plugin, const gchar *profile_na
 void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
                       GVariant *parameters, GAsyncReadyCallback callback,
                       gpointer user_data);
+void asusd_cleanup(AsusdBatteryPlugin *plugin);
+gboolean asusd_retry_init(gpointer user_data);
 
-/* Queue operations */
-void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
-                           GVariant *parameters, GAsyncReadyCallback callback,
-                           gpointer user_data);
-void process_next_operation(AsusdBatteryPlugin *plugin);
+/* ========== Forward declarations for internal functions ========== */
 
-/* Callbacks - все должны быть экспортированы */
-void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_proxy_properties_changed(GDBusProxy *proxy, GVariant *changed_properties,
-                                 GStrv invalidated_properties, gpointer user_data);
-void on_property_set_done(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_get_property_done(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void create_upower_proxy_async(AsusdBatteryPlugin *plugin);
 void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
-void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void create_about_dialog(AsusdBatteryPlugin *plugin);
 
-G_END_DECLS
-
-#endif /* __ASUSD_CLIENT_H__ */
+#endif /* ASUSD_CLIENT_H */

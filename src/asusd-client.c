@@ -34,6 +34,51 @@ void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
 void process_next_operation(AsusdBatteryPlugin *plugin);
 void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
 
+/* ========== AsyncCallContext API ========== */
+
+AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
+                                         const char *method_name,
+                                         GVariant *value,
+                                         GAsyncReadyCallback callback,
+                                         gpointer user_data,
+                                         GDestroyNotify destroy_notify) {
+    AsyncCallContext *ctx = g_new0(AsyncCallContext, 1);
+    g_weak_ref_init(&ctx->plugin_ref, G_OBJECT(plugin));
+    ctx->method_name = g_strdup(method_name);
+    if (value) ctx->value = g_variant_ref(value);
+    ctx->callback = callback;
+    ctx->user_data = user_data;
+    ctx->destroy_notify = destroy_notify;
+    ctx->ref_count = 1;
+    ctx->dialog_id = 0;
+    ctx->is_dialog_callback = FALSE;
+    return ctx;
+}
+
+void async_call_context_free(AsyncCallContext *ctx) {
+    if (!ctx) return;
+    if (g_atomic_int_dec_and_test(&ctx->ref_count)) {
+        g_weak_ref_clear(&ctx->plugin_ref);
+        g_free(ctx->method_name);
+        if (ctx->value) g_variant_unref(ctx->value);
+        if (ctx->destroy_notify && ctx->user_data) ctx->destroy_notify(ctx->user_data);
+        g_free(ctx);
+    }
+}
+
+void async_call_context_ref(AsyncCallContext *ctx) {
+    if (ctx) g_atomic_int_inc(&ctx->ref_count);
+}
+
+void async_call_context_unref(AsyncCallContext *ctx) {
+    if (ctx) async_call_context_free(ctx);
+}
+
+AsusdBatteryPlugin* async_call_context_get_plugin_ref(AsyncCallContext *ctx) {
+    if (!ctx) return NULL;
+    return g_weak_ref_get(&ctx->plugin_ref);
+}
+
 /* ========== Создание прокси ========== */
 
 void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
@@ -315,38 +360,6 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
 
 /* ========== Асинхронные операции с очередью ========== */
 
-AsyncCallContext* async_call_context_new(AsusdBatteryPlugin *plugin,
-                                         const char *method_name,
-                                         GVariant *value,
-                                         GAsyncReadyCallback callback,
-                                         gpointer user_data,
-                                         GDestroyNotify destroy_notify) {
-    AsyncCallContext *ctx = g_new0(AsyncCallContext, 1);
-    g_weak_ref_init(&ctx->plugin_ref, G_OBJECT(plugin));
-    ctx->method_name = g_strdup(method_name);
-    if (value) ctx->value = g_variant_ref(value);
-    ctx->callback = callback;
-    ctx->user_data = user_data;
-    ctx->destroy_notify = destroy_notify;
-    ctx->ref_count = 1;
-    ctx->dialog_id = 0;
-    ctx->is_dialog_callback = FALSE;
-    return ctx;
-}
-
-void async_call_context_free(AsyncCallContext *ctx) {
-    if (!ctx) return;
-    if (g_atomic_int_dec_and_test(&ctx->ref_count)) {
-        g_weak_ref_clear(&ctx->plugin_ref);
-        g_free(ctx->method_name);
-        if (ctx->value) g_variant_unref(ctx->value);
-        if (ctx->destroy_notify && ctx->user_data) ctx->destroy_notify(ctx->user_data);
-        g_free(ctx);
-    }
-}
-
-
-
 void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
                            GVariant *parameters, GAsyncReadyCallback callback,
                            gpointer user_data) {
@@ -389,9 +402,6 @@ void process_next_operation(AsusdBatteryPlugin *plugin) {
         plugin->processing_ops = FALSE; 
         return; 
     }
-    
-    /* REMOVED: ctx->ref_count <= 0 check - UAF vulnerability */
-    /* ctx is valid because we hold a reference via async_call_context_new */
     
     plugin->processing_ops = TRUE;
     plugin->pending_calls++;
@@ -539,6 +549,12 @@ void on_get_property_done(GObject *source,
         DEBUG_TRACE(
             "xfce4-asusd-battery: Plugin destroyed, discarding get property callback");
 
+        /* Если это dialog callback, освобождаем outer ctx */
+        if (ctx->is_dialog_callback && ctx->user_data) {
+            AsyncCallContext *outer_ctx = (AsyncCallContext*)ctx->user_data;
+            async_call_context_free(outer_ctx);
+        }
+
         if (plugin)
             g_object_unref(plugin);
 
@@ -549,6 +565,12 @@ void on_get_property_done(GObject *source,
     if (g_cancellable_is_cancelled(plugin->cancellable)) {
         DEBUG_TRACE(
             "xfce4-asusd-battery: Get property operation cancelled");
+
+        /* Если это dialog callback, освобождаем outer ctx */
+        if (ctx->is_dialog_callback && ctx->user_data) {
+            AsyncCallContext *outer_ctx = (AsyncCallContext*)ctx->user_data;
+            async_call_context_free(outer_ctx);
+        }
 
         g_object_unref(plugin);
         async_call_context_unref(ctx);
@@ -566,24 +588,37 @@ void on_get_property_done(GObject *source,
 
 /* ========== Работа со свойствами через GDBusConnection ========== */
 
-void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
-                              GAsyncReadyCallback callback, gpointer user_data) {
-    if (!plugin || !property || plugin->is_disposing) return;
-    if (g_cancellable_is_cancelled(plugin->cancellable)) return;
+/* В src/asusd-client.c - исправленная функция */
+
+gboolean asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
+                                  GAsyncReadyCallback callback, gpointer user_data) {
+    if (!plugin || !property || plugin->is_disposing) {
+        DEBUG_TRACE("xfce4-asusd-battery: Invalid parameters, operation not started");
+        return FALSE;
+    }
+    
+    if (g_cancellable_is_cancelled(plugin->cancellable)) {
+        DEBUG_TRACE("xfce4-asusd-battery: Cancelled, operation not started");
+        return FALSE;
+    }
+    
+    if (!plugin->connection) {
+        DEBUG_WARN("xfce4-asusd-battery: No connection available, operation not started");
+        return FALSE;
+    }
     
     DEBUG_TRACE("xfce4-asusd-battery: D-Bus Get property: %s", property);
     
-    if (!plugin->connection) {
-        DEBUG_WARN("xfce4-asusd-battery: No connection available");
-        return;
-    }
-    
     /* Создаем контекст для безопасной передачи user_data */
     AsyncCallContext *ctx = async_call_context_new(plugin, NULL, NULL, callback, user_data, NULL);
+    if (!ctx) {
+        DEBUG_WARN("xfce4-asusd-battery: Failed to create context, operation not started");
+        return FALSE;
+    }
+    
     ctx->method_name = g_strdup(property);
     ctx->is_dialog_callback = FALSE;
     
-    /* Правильный способ: создаем параметры и передаем их с флагом G_DBUS_CALL_FLAGS_NONE */
     /* GLib берет на себя управление памятью параметров */
     g_dbus_connection_call(
         plugin->connection,
@@ -591,7 +626,7 @@ void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
         ASUSD_OBJECT_PATH,
         DBUS_PROPERTIES_INTERFACE,
         "Get",
-        g_variant_new("(ss)", ASUSD_INTERFACE, property),  // <-- Передаем напрямую
+        g_variant_new("(ss)", ASUSD_INTERFACE, property),
         G_VARIANT_TYPE("(v)"),
         G_DBUS_CALL_FLAGS_NONE,
         ASUSD_TIMEOUT_MS,
@@ -599,7 +634,8 @@ void asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
         (GAsyncReadyCallback)on_get_property_done,
         ctx
     );
-    /* НЕ вызываем g_variant_unref() - GLib сам освободит параметры */
+    
+    return TRUE;
 }
 
 void asusd_set_property_async(AsusdBatteryPlugin *plugin, const char *property,
@@ -766,7 +802,6 @@ void asusd_cleanup(AsusdBatteryPlugin *plugin) {
 
 /* ========== Callbacks для загрузки данных ASUSD ========== */
 
-
 void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || plugin->is_disposing) {
@@ -796,7 +831,12 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
             DEBUG_WARN("xfce4-asusd-battery: PlatformProfileChoices not supported, using fallback");
             g_error_free(error);
             create_fallback_profiles(plugin);
-            asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+            if (!asusd_get_property_async(plugin, "PlatformProfile", 
+                                          (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
+                DEBUG_WARN("Failed to start async operation for PlatformProfile");
+                g_object_unref(plugin);
+                return;
+            }
             g_object_unref(plugin);
             return;
         }
@@ -812,7 +852,12 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     if (!result) {
         DEBUG_WARN("xfce4-asusd-battery: No result for PlatformProfileChoices");
         create_fallback_profiles(plugin);
-        asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        if (!asusd_get_property_async(plugin, "PlatformProfile",
+                                      (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
+            DEBUG_WARN("Failed to start async operation for PlatformProfile");
+            g_object_unref(plugin);
+            return;
+        }
         g_object_unref(plugin);
         return;
     }
@@ -820,12 +865,17 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     /* Извлекаем значение из результата */
     GVariant *value = NULL;
     g_variant_get(result, "(v)", &value);
-    g_variant_unref(result);  // <-- Освобождаем result сразу после получения value
+    g_variant_unref(result);
     
     if (!value) {
         DEBUG_WARN("xfce4-asusd-battery: No value in PlatformProfileChoices");
         create_fallback_profiles(plugin);
-        asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        if (!asusd_get_property_async(plugin, "PlatformProfile",
+                                      (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
+            DEBUG_WARN("Failed to start async operation for PlatformProfile");
+            g_object_unref(plugin);
+            return;
+        }
         g_object_unref(plugin);
         return;
     }
@@ -840,7 +890,12 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
         DEBUG_WARN("xfce4-asusd-battery: PlatformProfileChoices not array");
         g_variant_unref(value);
         create_fallback_profiles(plugin);
-        asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+        if (!asusd_get_property_async(plugin, "PlatformProfile",
+                                      (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
+            DEBUG_WARN("Failed to start async operation for PlatformProfile");
+            g_object_unref(plugin);
+            return;
+        }
         g_object_unref(plugin);
         return;
     }
@@ -856,7 +911,12 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     g_variant_unref(value);
     DEBUG_INFO("xfce4-asusd-battery: Loaded %d available performance profiles", plugin->profiles->len);
     
-    asusd_get_property_async(plugin, "PlatformProfile", (GAsyncReadyCallback)on_current_profile_loaded, plugin);
+    if (!asusd_get_property_async(plugin, "PlatformProfile",
+                                  (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
+        DEBUG_WARN("Failed to start async operation for PlatformProfile");
+        g_object_unref(plugin);
+        return;
+    }
     g_object_unref(plugin);
 }
 
@@ -903,7 +963,7 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     GVariant *value = NULL;
     g_variant_get(result, "(v)", &value);
-    g_variant_unref(result);  // <-- Освобождаем result сразу после получения value
+    g_variant_unref(result);
     
     if (!value) {
         DEBUG_TRACE("xfce4-asusd-battery: No value in PlatformProfile");
@@ -948,7 +1008,12 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     if (plugin->init_load_state == 0) {
         plugin->init_load_state = 1;
-        asusd_get_property_async(plugin, "ChargeControlEndThreshold", (GAsyncReadyCallback)on_limit_loaded, plugin);
+        if (!asusd_get_property_async(plugin, "ChargeControlEndThreshold",
+                                      (GAsyncReadyCallback)on_limit_loaded, plugin)) {
+            DEBUG_WARN("Failed to start async operation for ChargeControlEndThreshold");
+            g_object_unref(plugin);
+            return;
+        }
     }
     g_object_unref(plugin);
 }
@@ -992,7 +1057,13 @@ void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
         }
         g_variant_unref(result);
     }
-    asusd_get_property_async(plugin, "ChangePlatformProfileOnAc", (GAsyncReadyCallback)on_ac_switch_loaded, plugin);
+    
+    if (!asusd_get_property_async(plugin, "ChangePlatformProfileOnAc",
+                                  (GAsyncReadyCallback)on_ac_switch_loaded, plugin)) {
+        DEBUG_WARN("Failed to start async operation for ChangePlatformProfileOnAc");
+        g_object_unref(plugin);
+        return;
+    }
     g_object_unref(plugin);
 }
 
@@ -1033,7 +1104,13 @@ void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data)
         }
         g_variant_unref(result);
     }
-    asusd_get_property_async(plugin, "PlatformProfileOnAc", (GAsyncReadyCallback)on_ac_profile_loaded, plugin);
+    
+    if (!asusd_get_property_async(plugin, "PlatformProfileOnAc",
+                                  (GAsyncReadyCallback)on_ac_profile_loaded, plugin)) {
+        DEBUG_WARN("Failed to start async operation for PlatformProfileOnAc");
+        g_object_unref(plugin);
+        return;
+    }
     g_object_unref(plugin);
 }
 
@@ -1077,7 +1154,13 @@ void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data
         }
         g_variant_unref(result);
     }
-    asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery", (GAsyncReadyCallback)on_battery_switch_loaded, plugin);
+    
+    if (!asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
+                                  (GAsyncReadyCallback)on_battery_switch_loaded, plugin)) {
+        DEBUG_WARN("Failed to start async operation for ChangePlatformProfileOnBattery");
+        g_object_unref(plugin);
+        return;
+    }
     g_object_unref(plugin);
 }
 
@@ -1118,7 +1201,13 @@ void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_
         }
         g_variant_unref(result);
     }
-    asusd_get_property_async(plugin, "PlatformProfileOnBattery", (GAsyncReadyCallback)on_battery_profile_loaded, plugin);
+    
+    if (!asusd_get_property_async(plugin, "PlatformProfileOnBattery",
+                                  (GAsyncReadyCallback)on_battery_profile_loaded, plugin)) {
+        DEBUG_WARN("Failed to start async operation for PlatformProfileOnBattery");
+        g_object_unref(plugin);
+        return;
+    }
     g_object_unref(plugin);
 }
 

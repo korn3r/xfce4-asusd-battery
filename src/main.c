@@ -12,6 +12,19 @@
 #include <xfconf/xfconf.h>
 #include "debug.h"
 
+/* ========== Forward declarations ========== */
+
+/* UI Callbacks */
+void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin);
+void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data);
+gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin);
+void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+
+/* About dialog */
+void create_about_dialog(AsusdBatteryPlugin *plugin);
+
 /* ========== GObject определения ========== */
 
 G_DEFINE_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, G_TYPE_OBJECT)
@@ -86,8 +99,6 @@ static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
     plugin->profiles = g_ptr_array_new_with_free_func((GDestroyNotify)profile_settings_free);
     plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
     plugin->asusd_retry_timeout_id = 0;
-    
-    /* Initialize reconnection guard flag */
     plugin->reconnecting = FALSE;
 }
 
@@ -323,6 +334,29 @@ void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
 void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
     if (!plugin || plugin->is_disposing) return; 
     create_about_dialog(plugin); 
+}
+
+/* ========== About dialog ========== */
+
+void create_about_dialog(AsusdBatteryPlugin *plugin) {
+    if (!plugin || plugin->is_disposing) return;
+    
+    const char *authors[] = {
+        "korn3r",
+        NULL
+    };
+    
+    gtk_show_about_dialog(
+        NULL,
+        "program-name", "xfce4-asusd-battery",
+        "version", VERSION,
+        "comments", _("Battery and performance profile manager for ASUS laptops"),
+        "authors", authors,
+        "website", "https://github.com/korn3r/xfce4-asusd-battery",
+        "logo-icon-name", "battery-good-symbolic",
+        "license-type", GTK_LICENSE_GPL_3_0,
+        NULL
+    );
 }
 
 /* ========== Создание плагина ========== */
