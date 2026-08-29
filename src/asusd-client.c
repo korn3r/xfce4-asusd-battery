@@ -588,8 +588,6 @@ void on_get_property_done(GObject *source,
 
 /* ========== Работа со свойствами через GDBusConnection ========== */
 
-/* В src/asusd-client.c - исправленная функция */
-
 gboolean asusd_get_property_async(AsusdBatteryPlugin *plugin, const char *property,
                                   GAsyncReadyCallback callback, gpointer user_data) {
     if (!plugin || !property || plugin->is_disposing) {
