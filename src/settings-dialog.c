@@ -423,14 +423,13 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
     if (plugin->settings_dialog_open && plugin->dialog_state && plugin->dialog_state->dialog) {
-        DEBUG_TRACE("create_settings_dialog: dialog already open");
-        /* Проверяем, что диалог действительно существует и видим */
-        if (gtk_widget_get_visible(plugin->dialog_state->dialog)) {
+        /* Check if dialog is actually destroyed, not just hidden */
+        if (GTK_IS_WIDGET(plugin->dialog_state->dialog) && 
+            gtk_widget_get_parent(plugin->dialog_state->dialog) != NULL) {
             gtk_window_present(GTK_WINDOW(plugin->dialog_state->dialog));
             return;
         } else {
-            /* Диалог уничтожен, но состояние не очищено */
-            DEBUG_TRACE("create_settings_dialog: dialog destroyed but state not cleared, resetting");
+            /* Dialog is destroyed or invalid - clean up state */
             g_free(plugin->dialog_state);
             plugin->dialog_state = NULL;
             plugin->settings_dialog_open = FALSE;
