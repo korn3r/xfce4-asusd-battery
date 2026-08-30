@@ -822,6 +822,7 @@ void asusd_cleanup(AsusdBatteryPlugin *plugin) {
     plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
     plugin->processing_ops = FALSE;
     plugin->pending_calls = 0;
+    plugin->saving_settings = FALSE;  /* <-- ADD THIS LINE */
 }
 
 /* ========== Callbacks для загрузки данных ASUSD ========== */
@@ -1288,6 +1289,13 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     DEBUG_INFO("xfce4-asusd-battery: ASUSD initialization completed");
     if (plugin->dialog_state && plugin->dialog_state->dialog)
         settings_dialog_sync_from_asusd(plugin, FALSE);
+    
+    /* Resume processing queue if there are pending operations */
+    if (!g_queue_is_empty(plugin->operation_queue)) {
+        DEBUG_TRACE("xfce4-asusd-battery: Resuming operation queue (%u operations)", 
+                    g_queue_get_length(plugin->operation_queue));
+        process_next_operation(plugin);
+    }
     
     g_object_unref(plugin);
 }
