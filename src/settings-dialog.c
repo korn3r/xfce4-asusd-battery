@@ -151,6 +151,14 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
         return;
     }
     
+    /* Handle NULL result from failed operation */
+    if (!res) {
+        DEBUG_TRACE("on_dialog_property_loaded: operation failed with NULL result");
+        async_call_context_free(ctx);
+        g_object_unref(plugin);
+        return;
+    }
+    
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     

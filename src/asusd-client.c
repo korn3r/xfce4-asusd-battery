@@ -372,6 +372,13 @@ void asusd_queue_operation(AsusdBatteryPlugin *plugin, const char *method,
 void process_next_operation(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
+    /* Don't process during reconnect */
+    if (plugin->reconnecting) {
+        DEBUG_TRACE("xfce4-asusd-battery: Reconnecting in progress, deferring operations");
+        plugin->processing_ops = FALSE;
+        return;
+    }
+    
     if (g_cancellable_is_cancelled(plugin->cancellable)) {
         DEBUG_TRACE("xfce4-asusd-battery: Operation cancelled, clearing queue");
         g_queue_free_full(plugin->operation_queue, (GDestroyNotify)async_call_context_free);
@@ -485,20 +492,27 @@ void on_property_set_done(GObject *source,
                 return;
             }
 
+            /* Re-queue the operation before reconnect */
+            g_queue_push_head(plugin->operation_queue, ctx);
+            async_call_context_ref(ctx);
+
             plugin->reconnecting = TRUE;
             g_error_free(error);
 
             asusd_init_async(plugin);
 
             g_object_unref(plugin);
-            async_call_context_unref(ctx);
             return;
         }
 
         DEBUG_WARN("xfce4-asusd-battery: Operation failed: %s",
                    error->message);
 
-        if (ctx->callback) {
+        /* For dialog callbacks, pass NULL to indicate failure */
+        if (ctx->is_dialog_callback && ctx->callback) {
+            GAsyncReadyCallback callback = ctx->callback;
+            callback(source, NULL, ctx->user_data);
+        } else if (ctx->callback) {
             GAsyncReadyCallback callback = ctx->callback;
             callback(source, res, ctx->user_data);
         }
@@ -572,6 +586,18 @@ void on_get_property_done(GObject *source,
             async_call_context_free(outer_ctx);
         }
 
+        g_object_unref(plugin);
+        async_call_context_unref(ctx);
+        return;
+    }
+
+    /* Handle NULL result from failed operation */
+    if (!res) {
+        DEBUG_TRACE("xfce4-asusd-battery: Get property operation failed with NULL result");
+        if (ctx->is_dialog_callback && ctx->user_data) {
+            AsyncCallContext *outer_ctx = (AsyncCallContext*)ctx->user_data;
+            async_call_context_free(outer_ctx);
+        }
         g_object_unref(plugin);
         async_call_context_unref(ctx);
         return;
