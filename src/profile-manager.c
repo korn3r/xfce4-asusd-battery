@@ -11,7 +11,6 @@ static const char* enum_to_default_name(guint32 enum_value) {
         case 0: return "balanced";
         case 1: return "performance";
         case 2: return "quiet";
-        case 3: return "powersave";
         default: return "balanced";
     }
 }
@@ -127,8 +126,16 @@ gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
 
 void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
+    
+    /* Если профили уже есть — не перезаписываем */
+    if (plugin->profiles && plugin->profiles->len > 0) {
+        DEBUG_TRACE("ASUSD: Profiles already exist (%u), skipping fallback creation", plugin->profiles->len);
+        return;
+    }
+    
     DEBUG_TRACE("ASUSD: Creating fallback profiles");
     
+    /* Очищаем старые профили */
     if (plugin->profiles) {
         g_ptr_array_free(plugin->profiles, TRUE);
         plugin->profiles = NULL;
@@ -141,6 +148,7 @@ void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
     plugin->profiles = g_ptr_array_new_with_free_func((GDestroyNotify)profile_settings_free);
     plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
     
+    /* Только 3 профиля — как в ASUSD */
     const struct {
         guint32 enum_val;
         const char *name;
@@ -148,8 +156,7 @@ void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
     } fallback_profiles[] = {
         {0, "balanced", "battery-good-symbolic"},
         {1, "performance", "battery-full-symbolic"},
-        {2, "quiet", "battery-low-symbolic"},
-        {3, "powersave", "battery-caution-symbolic"}
+        {2, "quiet", "battery-low-symbolic"}
     };
     
     for (guint i = 0; i < G_N_ELEMENTS(fallback_profiles); i++) {
@@ -163,6 +170,8 @@ void create_fallback_profiles(AsusdBatteryPlugin *plugin) {
         g_hash_table_insert(plugin->profile_lookup, GINT_TO_POINTER(settings->enum_value), settings);
         DEBUG_TRACE("ASUSD: Added fallback profile: %s (enum: %u)", settings->default_name, settings->enum_value);
     }
+    
+    DEBUG_TRACE("ASUSD: Created %u fallback profiles", plugin->profiles->len);
 }
 
 void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
@@ -174,14 +183,47 @@ void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
     
     while (g_variant_iter_next(&iter, "u", &enum_value)) {
         const char *default_name = enum_to_default_name(enum_value);
-        ProfileSettings *settings = g_new0(ProfileSettings, 1);
-        settings->enum_value = enum_value;
-        settings->default_name = g_strdup(default_name);
-        settings->name = NULL;
-        settings->icon = g_strdup("battery-good-symbolic");
         
-        g_ptr_array_add(plugin->profiles, settings);
-        g_hash_table_insert(plugin->profile_lookup, GINT_TO_POINTER(enum_value), settings);
-        DEBUG_TRACE("ASUSD: Loaded profile: %s (enum: %u)", default_name, enum_value);
+        /* Проверяем существование через перебор profiles */
+        gboolean exists = FALSE;
+        ProfileSettings *existing = NULL;
+        
+        if (plugin->profiles) {
+            for (guint i = 0; i < plugin->profiles->len; i++) {
+                ProfileSettings *s = g_ptr_array_index(plugin->profiles, i);
+                if (s->enum_value == enum_value) {
+                    exists = TRUE;
+                    existing = s;
+                    break;
+                }
+            }
+        }
+        
+        if (!exists) {
+            const char *icon = "battery-good-symbolic";
+            if (g_strcmp0(default_name, "performance") == 0) {
+                icon = "battery-full-symbolic";
+            } else if (g_strcmp0(default_name, "balanced") == 0) {
+                icon = "battery-good-symbolic";
+            } else if (g_strcmp0(default_name, "quiet") == 0) {
+                icon = "battery-low-symbolic";
+            }
+            
+            ProfileSettings *settings = g_new0(ProfileSettings, 1);
+            settings->enum_value = enum_value;
+            settings->default_name = g_strdup(default_name);
+            settings->name = NULL;
+            settings->icon = g_strdup(icon);
+            
+            g_ptr_array_add(plugin->profiles, settings);
+            if (plugin->profile_lookup) {
+                g_hash_table_insert(plugin->profile_lookup, GINT_TO_POINTER(enum_value), settings);
+            }
+            DEBUG_TRACE("ASUSD: Loaded new profile: %s (enum: %u) icon: %s", default_name, enum_value, icon);
+        } else {
+            DEBUG_TRACE("ASUSD: Profile %s (enum: %u) already exists, keeping existing data (name='%s')", 
+                        default_name, enum_value,
+                        existing->name ? existing->name : "NULL");
+        }
     }
 }

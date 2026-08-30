@@ -12,6 +12,7 @@
 #include <xfconf/xfconf.h>
 #include "debug.h"
 
+
 /* ========== Forward declarations ========== */
 
 /* UI Callbacks */
@@ -113,8 +114,28 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     }
     
     const gchar *profile = plugin->current_profile ? plugin->current_profile : "balanced";
+    const gchar *display_profile = profile;
+    
+    /* Ищем кастомное имя для профиля */
+    if (plugin->profile_lookup && profile && g_strcmp0(profile, "unknown") != 0) {
+        GHashTableIter iter;
+        gpointer key, value;
+        g_hash_table_iter_init(&iter, plugin->profile_lookup);
+        while (g_hash_table_iter_next(&iter, &key, &value)) {
+            ProfileSettings *settings = (ProfileSettings*)value;
+            /* Ищем по default_name (который возвращает ASUSD) */
+            if (settings->default_name && g_strcmp0(profile, settings->default_name) == 0) {
+                if (settings->name && strlen(settings->name) > 0) {
+                    display_profile = settings->name;
+                }
+                break;
+            }
+        }
+    }
+    
     if (g_strcmp0(profile, "unknown") == 0) {
         profile = "balanced";
+        display_profile = "balanced";
         DEBUG_TRACE("update_profile_display: profile was 'unknown', using 'balanced'");
     }
     
@@ -122,6 +143,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     DEBUG_TRACE("  should_notify = %d", should_notify);
     DEBUG_TRACE("  hide_notifications = %d", plugin->hide_notifications);
     DEBUG_TRACE("  profile = '%s'", profile);
+    DEBUG_TRACE("  display_profile = '%s'", display_profile);
     DEBUG_TRACE("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
     
     gboolean profile_changed = FALSE;
@@ -158,8 +180,11 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         }
         
         if (!plugin->hide_text) {
-            gchar *display_text = g_strdup(profile);
-            if (g_strcmp0(profile, "balanced") == 0 || g_strcmp0(profile, "performance") == 0 || g_strcmp0(profile, "quiet") == 0) {
+            gchar *display_text = g_strdup(display_profile);
+            if (g_strcmp0(display_profile, "balanced") == 0 || 
+                g_strcmp0(display_profile, "performance") == 0 || 
+                g_strcmp0(display_profile, "quiet") == 0 ||
+                g_strcmp0(display_profile, "powersave") == 0) {
                 if (strlen(display_text) > 0) display_text[0] = g_ascii_toupper(display_text[0]);
             }
             gtk_label_set_text(GTK_LABEL(plugin->label), display_text);
@@ -176,7 +201,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     
     if (profile_changed && profile && g_strcmp0(profile, "unknown") != 0 && can_send_notification(plugin)) {
         DEBUG_TRACE("  >>> SENDING NOTIFICATION for profile: %s", profile);
-        gchar *display_name = g_strdup(profile);
+        gchar *display_name = g_strdup(display_profile);
         if (display_name[0] >= 'a' && display_name[0] <= 'z') display_name[0] = g_ascii_toupper(display_name[0]);
         const gchar *icon = get_profile_icon(plugin, profile);
         gchar *subtitle = g_strdup_printf(_("Current profile: %s"), display_name);
@@ -191,37 +216,153 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
 
 void load_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
+    
+    DEBUG_TRACE("=== load_settings: START ===");
+    DEBUG_TRACE("  CONFIG_CHANNEL = %s", CONFIG_CHANNEL);
+    DEBUG_TRACE("  CONFIG_PROPERTY_PREFIX = %s", CONFIG_PROPERTY_PREFIX);
+    DEBUG_TRACE("  plugin->profiles = %p", plugin->profiles);
+    if (plugin->profiles) {
+        DEBUG_TRACE("  profiles count = %u", plugin->profiles->len);
+    }
+    
+    /* Убеждаемся что profile_lookup существует */
+    if (!plugin->profile_lookup) {
+        DEBUG_TRACE("  profile_lookup is NULL - creating");
+        plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    }
+    
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
-    plugin->hide_icon = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_icon", FALSE);
-    plugin->hide_text = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_text", FALSE);
-    plugin->hide_notifications = xfconf_channel_get_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_notifications", FALSE);
+    if (!channel) {
+        DEBUG_WARN("Failed to get xfconf channel: %s", CONFIG_CHANNEL);
+        return;
+    }
+    
+    plugin->hide_icon = xfconf_channel_get_bool(channel, "/hide_icon", FALSE);
+    DEBUG_TRACE("  /hide_icon = %d", plugin->hide_icon);
+    
+    plugin->hide_text = xfconf_channel_get_bool(channel, "/hide_text", FALSE);
+    DEBUG_TRACE("  /hide_text = %d", plugin->hide_text);
+    
+    plugin->hide_notifications = xfconf_channel_get_bool(channel, "/hide_notifications", FALSE);
+    DEBUG_TRACE("  /hide_notifications = %d", plugin->hide_notifications);
+    
+    if (plugin->profiles) {
+        for (guint i = 0; i < plugin->profiles->len; i++) {
+            ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
+            
+            gchar *key = g_strdup_printf("/profile_%d_name", settings->enum_value);
+            gchar *saved_name = xfconf_channel_get_string(channel, key, NULL);
+            if (saved_name && strlen(saved_name) > 0) {
+                DEBUG_TRACE("  %s = '%s' (loaded)", key, saved_name);
+                g_free(settings->name);
+                settings->name = g_strdup(saved_name);
+            } else {
+                DEBUG_TRACE("  %s = (not set, using default)", key);
+            }
+            g_free(key);
+            g_free(saved_name);
+            
+            key = g_strdup_printf("/profile_%d_icon", settings->enum_value);
+            gchar *saved_icon = xfconf_channel_get_string(channel, key, NULL);
+            if (saved_icon && strlen(saved_icon) > 0) {
+                DEBUG_TRACE("  %s = '%s' (loaded)", key, saved_icon);
+                g_free(settings->icon);
+                settings->icon = g_strdup(saved_icon);
+            } else {
+                DEBUG_TRACE("  %s = (not set, using default)", key);
+            }
+            g_free(key);
+            g_free(saved_icon);
+            
+            /* Синхронизируем profile_lookup */
+            if (plugin->profile_lookup) {
+                g_hash_table_insert(plugin->profile_lookup, GINT_TO_POINTER(settings->enum_value), settings);
+            }
+        }
+    }
+    
+    DEBUG_TRACE("=== load_settings: END ===");
 }
 
 void save_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
+    
+    DEBUG_TRACE("=== save_settings: START ===");
+    DEBUG_TRACE("  CONFIG_CHANNEL = %s", CONFIG_CHANNEL);
+    DEBUG_TRACE("  CONFIG_PROPERTY_PREFIX = %s", CONFIG_PROPERTY_PREFIX);
+    
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
-    xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_icon", plugin->hide_icon);
-    xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_text", plugin->hide_text);
-    xfconf_channel_set_bool(channel, CONFIG_PROPERTY_PREFIX "/hide_notifications", plugin->hide_notifications);
+    if (!channel) {
+        DEBUG_WARN("Failed to get xfconf channel: %s", CONFIG_CHANNEL);
+        return;
+    }
+    
+    /* Сохраняем настройки */
+    gchar *full_path = g_strdup_printf("%shide_icon", CONFIG_PROPERTY_PREFIX);
+    xfconf_channel_set_bool(channel, full_path, plugin->hide_icon);
+    DEBUG_TRACE("  %s = %d (saved)", full_path, plugin->hide_icon);
+    g_free(full_path);
+    
+    full_path = g_strdup_printf("%shide_text", CONFIG_PROPERTY_PREFIX);
+    xfconf_channel_set_bool(channel, full_path, plugin->hide_text);
+    DEBUG_TRACE("  %s = %d (saved)", full_path, plugin->hide_text);
+    g_free(full_path);
+    
+    full_path = g_strdup_printf("%shide_notifications", CONFIG_PROPERTY_PREFIX);
+    xfconf_channel_set_bool(channel, full_path, plugin->hide_notifications);
+    DEBUG_TRACE("  %s = %d (saved)", full_path, plugin->hide_notifications);
+    g_free(full_path);
+    
     if (plugin->profiles) {
+        DEBUG_TRACE("  profiles count = %u", plugin->profiles->len);
         for (guint i = 0; i < plugin->profiles->len; i++) {
             ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
-            gchar *key = g_strdup_printf("%s/profile_%d_name", CONFIG_PROPERTY_PREFIX, settings->enum_value);
-            if (settings->name && strlen(settings->name) > 0)
+            DEBUG_TRACE("  profile %u: default_name='%s', name='%s', icon='%s'", 
+                        settings->enum_value,
+                        settings->default_name ? settings->default_name : "NULL",
+                        settings->name ? settings->name : "NULL",
+                        settings->icon ? settings->icon : "NULL");
+            
+            gchar *key = g_strdup_printf("%sprofile_%d_name", CONFIG_PROPERTY_PREFIX, settings->enum_value);
+            if (settings->name && strlen(settings->name) > 0) {
                 xfconf_channel_set_string(channel, key, settings->name);
-            else
+                DEBUG_TRACE("  %s = '%s' (saved)", key, settings->name);
+            } else {
                 xfconf_channel_set_string(channel, key, "");
+                DEBUG_TRACE("  %s = (cleared)", key);
+            }
             g_free(key);
-            key = g_strdup_printf("%s/profile_%d_icon", CONFIG_PROPERTY_PREFIX, settings->enum_value);
-            if (settings->icon && strlen(settings->icon) > 0)
+            
+            key = g_strdup_printf("%sprofile_%d_icon", CONFIG_PROPERTY_PREFIX, settings->enum_value);
+            
+            /* Определяем иконку по умолчанию */
+            const char *default_icon = NULL;
+            if (g_strcmp0(settings->default_name, "performance") == 0) {
+                default_icon = "battery-full-symbolic";
+            } else if (g_strcmp0(settings->default_name, "balanced") == 0) {
+                default_icon = "battery-good-symbolic";
+            } else if (g_strcmp0(settings->default_name, "quiet") == 0) {
+                default_icon = "battery-low-symbolic";
+            } else if (g_strcmp0(settings->default_name, "powersave") == 0) {
+                default_icon = "battery-caution-symbolic";
+            }
+            
+            DEBUG_TRACE("  default_icon for profile %u = '%s'", settings->enum_value, default_icon);
+            
+            /* Сохраняем только пользовательские иконки */
+            if (settings->icon && strlen(settings->icon) > 0 && default_icon && 
+                g_strcmp0(settings->icon, default_icon) != 0) {
                 xfconf_channel_set_string(channel, key, settings->icon);
-            else
+                DEBUG_TRACE("  %s = '%s' (saved, custom)", key, settings->icon);
+            } else {
                 xfconf_channel_set_string(channel, key, "");
+                DEBUG_TRACE("  %s = (cleared, default)", key);
+            }
             g_free(key);
         }
     }
+    
+    DEBUG_TRACE("=== save_settings: END ===");
 }
 
 /* ========== UI Callbacks ========== */
@@ -385,8 +526,12 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     if (!plugin_data) { DEBUG_WARN("Failed to allocate memory"); return; }
     
     plugin_data->plugin = plugin;
-    load_settings(plugin_data);
+    
+    /* 1. Сначала создаем профили по умолчанию */
     create_fallback_profiles(plugin_data);
+    
+    /* 2. Затем загружаем настройки из xfconf (перезаписывают значения по умолчанию) */
+    load_settings(plugin_data);
     
     plugin_data->button = gtk_button_new();
     if (!plugin_data->button) { DEBUG_WARN("Failed to create button"); g_object_unref(plugin_data); return; }
@@ -401,6 +546,8 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     gtk_box_pack_start(GTK_BOX(plugin_data->box), plugin_data->label, FALSE, FALSE, 0);
     
     update_profile_display(plugin_data, FALSE);
+    
+    /* 3. Инициализируем ASUSD (parse_profile_choices НЕ перезаписывает существующие профили) */
     asusd_init_async(plugin_data);
     
     g_signal_connect(G_OBJECT(plugin_data->button), "clicked", G_CALLBACK(on_button_clicked), plugin_data);

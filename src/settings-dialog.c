@@ -34,6 +34,8 @@ void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
     plugin->dialog_state->dirty_ac_profile = FALSE;
     plugin->dialog_state->dirty_battery_profile = FALSE;
     plugin->dialog_state->dirty_limit = FALSE;
+    plugin->dialog_state->dirty_name = FALSE;
+    plugin->dialog_state->dirty_icon = FALSE;
 }
 
 void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
@@ -431,13 +433,12 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
     if (plugin->settings_dialog_open && plugin->dialog_state && plugin->dialog_state->dialog) {
-        /* Check if dialog is actually destroyed, not just hidden */
+        DEBUG_TRACE("create_settings_dialog: dialog already open");
         if (GTK_IS_WIDGET(plugin->dialog_state->dialog) && 
             gtk_widget_get_parent(plugin->dialog_state->dialog) != NULL) {
             gtk_window_present(GTK_WINDOW(plugin->dialog_state->dialog));
             return;
         } else {
-            /* Dialog is destroyed or invalid - clean up state */
             g_free(plugin->dialog_state);
             plugin->dialog_state = NULL;
             plugin->settings_dialog_open = FALSE;
@@ -664,8 +665,29 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
             g_object_set_data(G_OBJECT(dialog), g_strdup_printf("entry_name_%d", settings->enum_value), entry_name);
             gtk_grid_attach(GTK_GRID(grid), entry_name, 1, row, 1, 1);
             g_signal_connect(G_OBJECT(entry_name), "changed", G_CALLBACK(on_any_setting_changed), plugin);
+            
             entry_icon = gtk_entry_new();
-            if (settings->icon && strlen(settings->icon) > 0) gtk_entry_set_text(GTK_ENTRY(entry_icon), settings->icon);
+            
+            /* Определяем иконку по умолчанию для этого профиля */
+            const char *default_icon = NULL;
+            if (g_strcmp0(settings->default_name, "performance") == 0) {
+                default_icon = "battery-full-symbolic";
+            } else if (g_strcmp0(settings->default_name, "balanced") == 0) {
+                default_icon = "battery-good-symbolic";
+            } else if (g_strcmp0(settings->default_name, "quiet") == 0) {
+                default_icon = "battery-low-symbolic";
+            } else if (g_strcmp0(settings->default_name, "powersave") == 0) {
+                default_icon = "battery-caution-symbolic";
+            }
+            
+            /* Показываем иконку в поле только если она задана и НЕ является иконкой по умолчанию */
+            if (settings->icon && strlen(settings->icon) > 0 && default_icon && 
+                g_strcmp0(settings->icon, default_icon) != 0) {
+                gtk_entry_set_text(GTK_ENTRY(entry_icon), settings->icon);
+            } else {
+                gtk_entry_set_text(GTK_ENTRY(entry_icon), "");
+            }
+            
             gtk_entry_set_placeholder_text(GTK_ENTRY(entry_icon), _("icon name"));
             gtk_widget_set_size_request(entry_icon, 120, -1);
             g_object_set_data(G_OBJECT(dialog), g_strdup_printf("entry_icon_%d", settings->enum_value), entry_icon);
@@ -750,14 +772,59 @@ void on_dialog_destroy(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     if (!plugin || !plugin->dialog_state || plugin->is_disposing) return;
     if (plugin->dialog_state->syncing_ui) return;
-    if (!plugin->settings_dialog_open) { DEBUG_TRACE("on_any_setting_changed: dialog is closed"); return; }
+    if (!plugin->settings_dialog_open) { 
+        DEBUG_TRACE("on_any_setting_changed: dialog is closed"); 
+        return; 
+    }
     DEBUG_TRACE("on_any_setting_changed: setting changed");
     SettingsDialogState *state = plugin->dialog_state;
-    if (widget == state->check_ac) { state->dirty_ac_enabled = TRUE; DEBUG_TRACE("  dirty_ac_enabled = TRUE"); }
-    else if (widget == state->check_battery) { state->dirty_battery_enabled = TRUE; DEBUG_TRACE("  dirty_battery_enabled = TRUE"); }
-    else if (widget == state->combo_ac) { state->dirty_ac_profile = TRUE; DEBUG_TRACE("  dirty_ac_profile = TRUE"); }
-    else if (widget == state->combo_battery) { state->dirty_battery_profile = TRUE; DEBUG_TRACE("  dirty_battery_profile = TRUE"); }
-    else if (widget == state->limit_check) { state->dirty_limit = TRUE; DEBUG_TRACE("  dirty_limit = TRUE"); }
+    
+    if (widget == state->check_ac) { 
+        state->dirty_ac_enabled = TRUE; 
+        DEBUG_TRACE("  dirty_ac_enabled = TRUE"); 
+    } else if (widget == state->check_battery) { 
+        state->dirty_battery_enabled = TRUE; 
+        DEBUG_TRACE("  dirty_battery_enabled = TRUE"); 
+    } else if (widget == state->combo_ac) { 
+        state->dirty_ac_profile = TRUE; 
+        DEBUG_TRACE("  dirty_ac_profile = TRUE"); 
+    } else if (widget == state->combo_battery) { 
+        state->dirty_battery_profile = TRUE; 
+        DEBUG_TRACE("  dirty_battery_profile = TRUE"); 
+    } else if (widget == state->limit_check) { 
+        state->dirty_limit = TRUE; 
+        DEBUG_TRACE("  dirty_limit = TRUE"); 
+    } else if (GTK_IS_ENTRY(widget)) {
+        /* Проверяем, является ли виджет полем ввода имени или иконки */
+        GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(widget)));
+        if (dialog && plugin->profiles) {
+            for (guint i = 0; i < plugin->profiles->len; i++) {
+                ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
+                gchar *key_name = g_strdup_printf("entry_name_%d", settings->enum_value);
+                gchar *key_icon = g_strdup_printf("entry_icon_%d", settings->enum_value);
+                
+                GtkWidget *entry_name = g_object_get_data(G_OBJECT(dialog), key_name);
+                GtkWidget *entry_icon = g_object_get_data(G_OBJECT(dialog), key_icon);
+                
+                if (widget == entry_name) {
+                    state->dirty_name = TRUE;
+                    DEBUG_TRACE("  dirty_name = TRUE (profile %d)", settings->enum_value);
+                    g_free(key_name);
+                    g_free(key_icon);
+                    return;
+                }
+                if (widget == entry_icon) {
+                    state->dirty_icon = TRUE;
+                    DEBUG_TRACE("  dirty_icon = TRUE (profile %d)", settings->enum_value);
+                    g_free(key_name);
+                    g_free(key_icon);
+                    return;
+                }
+                g_free(key_name);
+                g_free(key_icon);
+            }
+        }
+    }
 }
 
 void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
@@ -832,6 +899,72 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     SettingsDialogState *state = plugin->dialog_state;
     if (!state) return;
     
+    /* ===== 1. Сначала применяем изменения UI (имя/иконка) ===== */
+    gboolean name_or_icon_changed = FALSE;
+    
+    if (plugin->profiles) {
+        for (guint i = 0; i < plugin->profiles->len; i++) {
+            ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
+            
+            /* Применяем имя */
+            gchar *key_name = g_strdup_printf("entry_name_%d", settings->enum_value);
+            GtkWidget *entry_name = g_object_get_data(G_OBJECT(dialog), key_name);
+            if (entry_name) {
+                const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry_name));
+                gchar *old_name = g_strdup(settings->name);
+                
+                if (text && strlen(text) > 0) {
+                    g_free(settings->name);
+                    settings->name = g_strdup(text);
+                } else {
+                    g_free(settings->name);
+                    settings->name = NULL;
+                }
+                
+                if (g_strcmp0(old_name, settings->name) != 0) {
+                    name_or_icon_changed = TRUE;
+                }
+                g_free(old_name);
+            }
+            g_free(key_name);
+            
+            /* Применяем иконку */
+            gchar *key_icon = g_strdup_printf("entry_icon_%d", settings->enum_value);
+            GtkWidget *entry_icon = g_object_get_data(G_OBJECT(dialog), key_icon);
+            if (entry_icon) {
+                const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry_icon));
+                gchar *old_icon = g_strdup(settings->icon);
+                
+                /* Определяем иконку по умолчанию */
+                const char *default_icon = NULL;
+                if (g_strcmp0(settings->default_name, "performance") == 0) {
+                    default_icon = "battery-full-symbolic";
+                } else if (g_strcmp0(settings->default_name, "balanced") == 0) {
+                    default_icon = "battery-good-symbolic";
+                } else if (g_strcmp0(settings->default_name, "quiet") == 0) {
+                    default_icon = "battery-low-symbolic";
+                } else if (g_strcmp0(settings->default_name, "powersave") == 0) {
+                    default_icon = "battery-caution-symbolic";
+                }
+                
+                if (text && strlen(text) > 0 && g_strcmp0(text, default_icon) != 0) {
+                    g_free(settings->icon);
+                    settings->icon = g_strdup(text);
+                } else {
+                    g_free(settings->icon);
+                    settings->icon = NULL;
+                }
+                
+                if (g_strcmp0(old_icon, settings->icon) != 0) {
+                    name_or_icon_changed = TRUE;
+                }
+                g_free(old_icon);
+            }
+            g_free(key_icon);
+        }
+    }
+    
+    /* ===== 2. Затем применяем изменения UI (галочки, комбобоксы) ===== */
     gboolean new_hide_icon = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->hide_icon_check));
     gboolean new_hide_text = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->hide_text_check));
     gboolean new_hide_notifications = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->notifications_check));
@@ -842,11 +975,19 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (new_hide_notifications != plugin->hide_notifications) { plugin->hide_notifications = new_hide_notifications; hide_changed = TRUE; }
     if (hide_changed) update_profile_display(plugin, FALSE);
     
+    /* ===== 3. Если есть изменения UI, сохраняем их сразу ===== */
+    if (name_or_icon_changed || hide_changed) {
+        save_settings(plugin);
+        DEBUG_TRACE("  UI changes saved (name/icon/hide options)");
+    }
+    
+    /* ===== 4. Проверяем D-Bus изменения ===== */
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        DEBUG_TRACE("  ASUSD not available, cannot apply settings");
+        DEBUG_TRACE("  ASUSD not available, cannot apply D-Bus settings");
         if (!plugin->hide_notifications)
             send_notification(_("Error"), _("ASUSD is not available. Cannot apply settings."), TRUE, "emblem-readonly");
-        save_settings(plugin);
+        settings_dialog_reset_dirty(plugin);
+        plugin->saving_settings = FALSE;
         return;
     }
     
@@ -866,11 +1007,35 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
     }
     
+    /* ===== 5. Если нет D-Bus изменений, завершаем ===== */
+    gboolean dbus_changed = FALSE;
+    if (new_ac_enabled != plugin->auto_switch_ac_enabled) dbus_changed = TRUE;
+    if (new_battery_enabled != plugin->auto_switch_battery_enabled) dbus_changed = TRUE;
+    if (new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) dbus_changed = TRUE;
+    if (new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) dbus_changed = TRUE;
+    if (new_limit_enabled != plugin->battery_limit_enabled) dbus_changed = TRUE;
+    
+    if (!dbus_changed) {
+        DEBUG_TRACE("  No D-Bus changes detected");
+        if (!name_or_icon_changed && !hide_changed) {
+            if (!plugin->hide_notifications)
+                send_notification(_("No changes"), _("Settings are already up to date"), FALSE, "emblem-default");
+        } else {
+            if (!plugin->hide_notifications)
+                send_notification(_("Settings applied"), _("UI settings updated"), FALSE, "emblem-system");
+        }
+        settings_dialog_reset_dirty(plugin);
+        plugin->saving_settings = FALSE;
+        g_free(new_ac_profile);
+        g_free(new_battery_profile);
+        return;
+    }
+    
+    /* ===== 6. Применяем D-Bus изменения через очередь ===== */
     plugin->saving_settings = TRUE;
     
     SettingsApplyContext *ctx = g_new0(SettingsApplyContext, 1);
     g_weak_ref_init(&ctx->plugin_ref, G_OBJECT(plugin));
-    /* Используем g_weak_ref_get() для получения plugin в callback */
     ctx->new_ac_enabled = new_ac_enabled;
     ctx->new_battery_enabled = new_battery_enabled;
     ctx->new_ac_profile = g_strdup(new_ac_profile);
@@ -889,20 +1054,10 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) ctx->total_steps++;
     if (ctx->new_limit != plugin->current_battery_limit) ctx->total_steps++;
     
-    if (ctx->total_steps == 0) {
-        DEBUG_TRACE("  No ASUSD changes detected");
-        save_settings(plugin);
-        settings_dialog_reset_dirty(plugin);
-        if (!plugin->hide_notifications)
-            send_notification(_("No changes"), _("Settings are already up to date"), FALSE, "emblem-default");
-        g_weak_ref_clear(&ctx->plugin_ref);
-        g_free(ctx->new_ac_profile); g_free(ctx->new_battery_profile);
-        g_free(ctx);
-        plugin->saving_settings = FALSE;
-        return;
-    }
+    g_free(new_ac_profile);
+    g_free(new_battery_profile);
     
-    DEBUG_TRACE("  Starting apply with %d steps", ctx->total_steps);
+    DEBUG_TRACE("  Starting apply with %d D-Bus steps", ctx->total_steps);
     apply_next_setting(ctx);
 }
 

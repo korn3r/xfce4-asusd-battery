@@ -24,6 +24,8 @@ typedef struct _SettingsDialogState {
     gboolean dirty_ac_profile;
     gboolean dirty_battery_profile;
     gboolean dirty_limit;
+    gboolean dirty_name;
+    gboolean dirty_icon;
 } SettingsDialogState;
 
 /* ========== Settings context for apply ========== */
@@ -61,5 +63,12 @@ void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
 void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *dialog);
 void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog);
 void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+
+/* ========== Internal functions ========== */
+
+gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id);
+void apply_next_setting(SettingsApplyContext *ctx);
+void on_settings_apply_step_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_settings_apply_complete(SettingsApplyContext *ctx);
 
 #endif /* SETTINGS_DIALOG_H */

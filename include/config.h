@@ -18,7 +18,7 @@
 
 /* ========== Xfconf configuration ========== */
 
-#define CONFIG_CHANNEL "xfce4-panel"
-#define CONFIG_PROPERTY_PREFIX "/plugins/xfce4-asusd-battery"
+#define CONFIG_CHANNEL "xfce4-asusd-battery"
+#define CONFIG_PROPERTY_PREFIX "/"
 
 #endif /* CONFIG_H */

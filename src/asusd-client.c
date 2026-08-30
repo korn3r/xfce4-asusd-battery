@@ -747,16 +747,9 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (g_cancellable_is_cancelled(plugin->cancellable)) return;
     
-    /* 
-     * NOTE: reconnecting flag is NOT checked here.
-     * The flag is set by on_property_set_done() and cleared in:
-     * - on_asusd_proxy_created() (success or failure)
-     * - asusd_retry_init()
-     * - on_battery_profile_loaded()
-     * - asusd_cleanup()
-     */
-    
     DEBUG_TRACE("xfce4-asusd-battery: Initializing asynchronously...");
+    
+    /* Очищаем старый proxy, НО НЕ УНИЧТОЖАЕМ ПРОФИЛИ! */
     if (plugin->asusd_proxy) {
         DEBUG_TRACE("xfce4-asusd-battery: Cleaning up old proxy");
         g_signal_handlers_disconnect_by_data(plugin->asusd_proxy, plugin);
@@ -764,17 +757,8 @@ void asusd_init_async(AsusdBatteryPlugin *plugin) {
         g_clear_object(&plugin->connection);
     }
     
-    if (plugin->profiles) {
-        g_ptr_array_free(plugin->profiles, TRUE);
-        plugin->profiles = NULL;
-    }
-    if (plugin->profile_lookup) {
-        g_hash_table_destroy(plugin->profile_lookup);
-        plugin->profile_lookup = NULL;
-    }
-    
-    plugin->profiles = g_ptr_array_new_with_free_func((GDestroyNotify)profile_settings_free);
-    plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    /* НЕ УНИЧТОЖАЕМ ПРОФИЛИ! */
+    /* Профили уже созданы в create_fallback_profiles() и загружены в load_settings() */
     
     plugin->asusd_state = ASUSD_STATE_CONNECTING;
     create_asusd_proxy_async(plugin);
