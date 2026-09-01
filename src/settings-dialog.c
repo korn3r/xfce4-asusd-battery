@@ -7,6 +7,7 @@
 #include "asusd-client.h"
 #include "debug.h"
 #include <libxfce4util/libxfce4util.h>
+#include <stdlib.h>
 
 /* ========== Forward declarations ========== */
 void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data);
@@ -25,6 +26,61 @@ gboolean is_dialog_valid(AsusdBatteryPlugin *plugin, guint dialog_id) {
     return TRUE;
 }
 
+/* Проверка валидности значения в поле ввода */
+static gboolean validate_custom_time(GtkEntry *entry, GtkLabel *error_label, guint *out_value) {
+    const gchar *text = gtk_entry_get_text(entry);
+    
+    /* Пустое поле — не показываем ошибку, просто возвращаем FALSE */
+    if (!text || strlen(text) == 0) {
+        gtk_widget_set_visible(GTK_WIDGET(error_label), FALSE);
+        return FALSE;
+    }
+    
+    gchar *endptr;
+    gulong val = strtoul(text, &endptr, 10);
+    
+    if (*endptr != '\0') {
+        gtk_label_set_text(error_label, _("Please enter a number"));
+        gtk_widget_set_visible(GTK_WIDGET(error_label), TRUE);
+        return FALSE;
+    }
+    
+    if (val < 100 || val > 5000) {
+        gtk_label_set_text(error_label, _("Value must be between 100 and 5000 ms"));
+        gtk_widget_set_visible(GTK_WIDGET(error_label), TRUE);
+        return FALSE;
+    }
+    
+    gtk_widget_set_visible(GTK_WIDGET(error_label), FALSE);
+    if (out_value) {
+        *out_value = (guint)val;
+    }
+    return TRUE;
+}
+
+/* Callback при изменении текста в поле ввода */
+void on_custom_time_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
+    if (!plugin || !plugin->dialog_state) return;
+    if (plugin->dialog_state->syncing_ui) return;
+    
+    SettingsDialogState *state = plugin->dialog_state;
+    
+    /* Если чекбокс Custom time не активен — скрываем ошибку и выходим */
+    if (!gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->custom_time_check))) {
+        gtk_widget_set_visible(GTK_WIDGET(state->custom_time_error_label), FALSE);
+        return;
+    }
+    
+    /* Если поле ввода неактивно — скрываем ошибку и выходим */
+    if (!gtk_widget_get_sensitive(state->custom_time_entry)) {
+        gtk_widget_set_visible(GTK_WIDGET(state->custom_time_error_label), FALSE);
+        return;
+    }
+    
+    guint dummy;
+    validate_custom_time(GTK_ENTRY(widget), GTK_LABEL(state->custom_time_error_label), &dummy);
+}
+
 /* ========== Функции диалога настроек ========== */
 
 void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
@@ -36,6 +92,9 @@ void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
     plugin->dialog_state->dirty_limit = FALSE;
     plugin->dialog_state->dirty_name = FALSE;
     plugin->dialog_state->dirty_icon = FALSE;
+    plugin->dialog_state->dirty_antiflapping = FALSE;
+    plugin->dialog_state->dirty_custom_time = FALSE;
+    plugin->dialog_state->dirty_timeout = FALSE;
 }
 
 void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
@@ -60,6 +119,22 @@ void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->hide_text_check), plugin->hide_text);
     if (state->notifications_check)
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->notifications_check), plugin->hide_notifications);
+    
+    /* Anti-flapping */
+    if (state->antiflapping_check && !state->dirty_antiflapping)
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->antiflapping_check), plugin->enable_antiflapping);
+    if (state->custom_time_check && !state->dirty_custom_time)
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->custom_time_check), plugin->custom_time_enabled);
+    if (state->custom_time_entry && !state->dirty_timeout) {
+        gchar *text = g_strdup_printf("%u", plugin->custom_timeout_ms);
+        gtk_entry_set_text(GTK_ENTRY(state->custom_time_entry), text);
+        g_free(text);
+    }
+    
+    /* Скрываем ошибку при обновлении UI */
+    if (state->custom_time_error_label) {
+        gtk_widget_set_visible(GTK_WIDGET(state->custom_time_error_label), FALSE);
+    }
     
     if (state->combo_ac && !state->dirty_ac_profile && plugin->auto_switch_ac_profile) {
         GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
@@ -113,6 +188,11 @@ void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_d
     guint dialog_id = plugin->dialog_state->dialog_id;
     plugin->dialog_state->syncing_ui = TRUE;
     DEBUG_TRACE("settings_dialog_sync_from_asusd: Loading settings from ASUSD");
+    
+    /* Скрываем ошибку при загрузке */
+    if (plugin->dialog_state->custom_time_error_label) {
+        gtk_widget_set_visible(GTK_WIDGET(plugin->dialog_state->custom_time_error_label), FALSE);
+    }
     
     AsyncCallContext *ctx = async_call_context_new(plugin, NULL, NULL,
                                                    (GAsyncReadyCallback)on_dialog_property_loaded, NULL, NULL);
@@ -487,6 +567,10 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     GtkWidget *options_hbox;
     GtkWidget *hide_label;
     GtkWidget *separator;
+    GtkWidget *antiflapping_frame;
+    GtkWidget *antiflapping_vbox;
+    GtkWidget *custom_time_hbox;
+    GtkWidget *ms_label;
     int row = 0;
     
     DEBUG_TRACE("=== create_settings_dialog: OPENING ===");
@@ -530,6 +614,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     gtk_widget_set_halign(main_vbox, GTK_ALIGN_CENTER);
     gtk_box_pack_start(GTK_BOX(vbox), main_vbox, TRUE, TRUE, 0);
     
+    /* Auto switch profiles */
     auto_frame = gtk_frame_new(_("Auto switch profiles"));
     gtk_box_pack_start(GTK_BOX(main_vbox), auto_frame, FALSE, FALSE, 0);
     auto_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -615,6 +700,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     g_signal_connect(G_OBJECT(combo_battery), "changed", G_CALLBACK(on_any_setting_changed), plugin);
     g_signal_connect(G_OBJECT(check_battery), "toggled", G_CALLBACK(on_auto_switch_toggled), dialog);
     
+    /* Battery charge limit */
     GtkWidget *limit_frame = gtk_frame_new(_("Battery charge limit"));
     gtk_box_pack_start(GTK_BOX(main_vbox), limit_frame, FALSE, FALSE, 0);
     GtkWidget *limit_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -636,6 +722,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     g_signal_connect(G_OBJECT(one_shot_button), "clicked", G_CALLBACK(on_one_shot_clicked), dialog);
     gtk_box_pack_start(GTK_BOX(one_shot_hbox), one_shot_button, FALSE, FALSE, 0);
     
+    /* Profile names and icons */
     hide_frame = gtk_frame_new(_("Profile names and icons"));
     gtk_box_pack_start(GTK_BOX(main_vbox), hide_frame, FALSE, FALSE, 0);
     hide_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -676,8 +763,6 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
                 default_icon = "battery-good-symbolic";
             } else if (g_strcmp0(settings->default_name, "quiet") == 0) {
                 default_icon = "battery-low-symbolic";
-            } else if (g_strcmp0(settings->default_name, "powersave") == 0) {
-                default_icon = "battery-caution-symbolic";
             }
             
             /* Показываем иконку в поле только если она задана и НЕ является иконкой по умолчанию */
@@ -697,6 +782,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
         }
     }
     
+    /* Display options */
     options_frame = gtk_frame_new(_("Display options"));
     gtk_box_pack_start(GTK_BOX(main_vbox), options_frame, FALSE, FALSE, 0);
     options_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -726,6 +812,67 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     g_object_set_data(G_OBJECT(dialog), "notifications_check", notifications_check_widget);
     g_signal_connect(G_OBJECT(notifications_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
     
+    /* Anti-flapping */
+    antiflapping_frame = gtk_frame_new(_("Anti-flapping"));
+    gtk_box_pack_start(GTK_BOX(main_vbox), antiflapping_frame, FALSE, FALSE, 0);
+    
+    antiflapping_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(antiflapping_vbox), 5);
+    gtk_container_add(GTK_CONTAINER(antiflapping_frame), antiflapping_vbox);
+    
+    /* Anti-flapping checkbox */
+    GtkWidget *antiflapping_check = gtk_check_button_new_with_label(_("Enable anti-flapping (debounce notifications)"));
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(antiflapping_check), plugin->enable_antiflapping);
+    state->antiflapping_check = antiflapping_check;
+    gtk_box_pack_start(GTK_BOX(antiflapping_vbox), antiflapping_check, FALSE, FALSE, 0);
+    g_signal_connect(G_OBJECT(antiflapping_check), "toggled", G_CALLBACK(on_antiflapping_toggled), plugin);
+    g_signal_connect(G_OBJECT(antiflapping_check), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
+    
+    /* Custom time row */
+    custom_time_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_halign(custom_time_hbox, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(antiflapping_vbox), custom_time_hbox, FALSE, FALSE, 0);
+
+    GtkWidget *custom_time_check = gtk_check_button_new_with_label(_("Custom time:"));
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(custom_time_check), plugin->custom_time_enabled);
+    gtk_widget_set_sensitive(custom_time_check, plugin->enable_antiflapping);
+    state->custom_time_check = custom_time_check;
+    gtk_box_pack_start(GTK_BOX(custom_time_hbox), custom_time_check, FALSE, FALSE, 0);
+    g_signal_connect(G_OBJECT(custom_time_check), "toggled", G_CALLBACK(on_custom_time_toggled), plugin);
+    g_signal_connect(G_OBJECT(custom_time_check), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
+
+    /* Поле ввода с ограничением ширины */
+    GtkWidget *custom_time_entry = gtk_entry_new();
+    gchar *timeout_text = g_strdup_printf("%u", plugin->custom_timeout_ms);
+    gtk_entry_set_text(GTK_ENTRY(custom_time_entry), timeout_text);
+    gtk_entry_set_placeholder_text(GTK_ENTRY(custom_time_entry), _("1500"));
+    gtk_entry_set_width_chars(GTK_ENTRY(custom_time_entry), 4);  /* ← ограничение ширины */
+    gtk_widget_set_size_request(custom_time_entry, 60, -1);      /* ← фиксированная ширина */
+    gtk_widget_set_sensitive(custom_time_entry, plugin->custom_time_enabled && plugin->enable_antiflapping);
+    state->custom_time_entry = custom_time_entry;
+    gtk_box_pack_start(GTK_BOX(custom_time_hbox), custom_time_entry, FALSE, FALSE, 0);
+    g_free(timeout_text);
+    g_signal_connect(G_OBJECT(custom_time_entry), "changed", G_CALLBACK(on_custom_time_changed), plugin);
+    g_signal_connect(G_OBJECT(custom_time_entry), "changed", G_CALLBACK(on_any_setting_changed), plugin);
+
+    /* ms_label уже объявлен в начале функции, используем его */
+    ms_label = gtk_label_new(_("ms"));
+    gtk_box_pack_start(GTK_BOX(custom_time_hbox), ms_label, FALSE, FALSE, 0);
+    /* Метка для ошибки (невидимая по умолчанию) */
+    GtkWidget *error_label = gtk_label_new(_("Value must be between 100 and 5000 ms"));
+    gtk_widget_set_halign(error_label, GTK_ALIGN_START);
+    gtk_widget_set_visible(error_label, FALSE);
+    gtk_widget_set_sensitive(error_label, FALSE);
+    gtk_label_set_xalign(GTK_LABEL(error_label), 0.0);
+    GtkCssProvider *css_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(css_provider, "label { color: #cc0000; }", -1, NULL);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(error_label),
+                                   GTK_STYLE_PROVIDER(css_provider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(css_provider);
+    state->custom_time_error_label = error_label;
+    gtk_box_pack_start(GTK_BOX(antiflapping_vbox), error_label, FALSE, FALSE, 0);    
+    /* Buttons */
     separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
     gtk_box_pack_start(GTK_BOX(main_vbox), separator, FALSE, FALSE, 5);
     button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -794,6 +941,15 @@ void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     } else if (widget == state->limit_check) { 
         state->dirty_limit = TRUE; 
         DEBUG_TRACE("  dirty_limit = TRUE"); 
+    } else if (widget == state->antiflapping_check) {
+        state->dirty_antiflapping = TRUE;
+        DEBUG_TRACE("  dirty_antiflapping = TRUE");
+    } else if (widget == state->custom_time_check) {
+        state->dirty_custom_time = TRUE;
+        DEBUG_TRACE("  dirty_custom_time = TRUE");
+    } else if (widget == state->custom_time_entry) {
+        state->dirty_timeout = TRUE;
+        DEBUG_TRACE("  dirty_timeout = TRUE");
     } else if (GTK_IS_ENTRY(widget)) {
         /* Проверяем, является ли виджет полем ввода имени или иконки */
         GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(widget)));
@@ -855,6 +1011,48 @@ void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *dialog) {
     if (check_battery && combo_battery) {
         gboolean active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(check_battery));
         gtk_widget_set_sensitive(combo_battery, active);
+    }
+}
+
+void on_antiflapping_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
+    if (!plugin || !plugin->dialog_state || plugin->is_disposing) return;
+    if (plugin->dialog_state->syncing_ui) return;
+    
+    gboolean active = gtk_toggle_button_get_active(toggle_button);
+    
+    if (plugin->dialog_state->custom_time_check) {
+        gtk_widget_set_sensitive(plugin->dialog_state->custom_time_check, active);
+        if (!active) {
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->custom_time_check), FALSE);
+            if (plugin->dialog_state->custom_time_entry) {
+                gtk_widget_set_sensitive(plugin->dialog_state->custom_time_entry, FALSE);
+            }
+            /* Скрываем сообщение об ошибке при выключении anti-flapping */
+            if (plugin->dialog_state->custom_time_error_label) {
+                gtk_widget_set_visible(GTK_WIDGET(plugin->dialog_state->custom_time_error_label), FALSE);
+            }
+        } else {
+            gboolean custom_active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(plugin->dialog_state->custom_time_check));
+            if (plugin->dialog_state->custom_time_entry) {
+                gtk_widget_set_sensitive(plugin->dialog_state->custom_time_entry, custom_active);
+            }
+        }
+    }
+}
+
+void on_custom_time_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
+    if (!plugin || !plugin->dialog_state || plugin->is_disposing) return;
+    if (plugin->dialog_state->syncing_ui) return;
+    
+    gboolean active = gtk_toggle_button_get_active(toggle_button);
+    
+    if (plugin->dialog_state->custom_time_entry) {
+        gtk_widget_set_sensitive(plugin->dialog_state->custom_time_entry, active);
+    }
+    
+    /* При выключении чекбокса скрываем сообщение об ошибке */
+    if (!active && plugin->dialog_state->custom_time_error_label) {
+        gtk_widget_set_visible(GTK_WIDGET(plugin->dialog_state->custom_time_error_label), FALSE);
     }
 }
 
@@ -943,8 +1141,6 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
                     default_icon = "battery-good-symbolic";
                 } else if (g_strcmp0(settings->default_name, "quiet") == 0) {
                     default_icon = "battery-low-symbolic";
-                } else if (g_strcmp0(settings->default_name, "powersave") == 0) {
-                    default_icon = "battery-caution-symbolic";
                 }
                 
                 if (text && strlen(text) > 0 && g_strcmp0(text, default_icon) != 0) {
@@ -975,13 +1171,59 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (new_hide_notifications != plugin->hide_notifications) { plugin->hide_notifications = new_hide_notifications; hide_changed = TRUE; }
     if (hide_changed) update_profile_display(plugin, FALSE);
     
-    /* ===== 3. Если есть изменения UI, сохраняем их сразу ===== */
-    if (name_or_icon_changed || hide_changed) {
-        save_settings(plugin);
-        DEBUG_TRACE("  UI changes saved (name/icon/hide options)");
+    /* ===== 3. Применяем anti-flapping настройки ===== */
+    gboolean new_antiflapping = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->antiflapping_check));
+    gboolean new_custom_time = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->custom_time_check));
+    guint new_timeout = plugin->custom_timeout_ms;
+
+    /* Валидируем поле ввода */
+    if (state->custom_time_entry && gtk_widget_get_sensitive(state->custom_time_entry)) {
+        guint validated_timeout;
+        if (validate_custom_time(GTK_ENTRY(state->custom_time_entry), 
+                                 GTK_LABEL(state->custom_time_error_label), 
+                                 &validated_timeout)) {
+            new_timeout = validated_timeout;
+        } else {
+            /* Невалидное значение — показываем ошибку и не применяем */
+            DEBUG_WARN("  Invalid custom timeout value, not applying");
+            if (!plugin->hide_notifications) {
+                send_notification(_("Invalid value"), 
+                                 _("Timeout must be between 100 and 5000 ms"), 
+                                 TRUE, "dialog-error");
+            }
+            return;
+        }
+    }
+    const gchar *timeout_text = gtk_entry_get_text(GTK_ENTRY(state->custom_time_entry));
+    if (timeout_text && strlen(timeout_text) > 0) {
+        gchar *endptr;
+        gulong val = strtoul(timeout_text, &endptr, 10);
+        if (*endptr == '\0' && val > 0 && val <= 60000) {
+            new_timeout = (guint)val;
+        }
     }
     
-    /* ===== 4. Проверяем D-Bus изменения ===== */
+    gboolean antiflapping_changed = FALSE;
+    if (new_antiflapping != plugin->enable_antiflapping) {
+        plugin->enable_antiflapping = new_antiflapping;
+        antiflapping_changed = TRUE;
+    }
+    if (new_custom_time != plugin->custom_time_enabled) {
+        plugin->custom_time_enabled = new_custom_time;
+        antiflapping_changed = TRUE;
+    }
+    if (new_timeout != plugin->custom_timeout_ms) {
+        plugin->custom_timeout_ms = new_timeout;
+        antiflapping_changed = TRUE;
+    }
+    
+    /* ===== 4. Сохраняем все UI изменения ===== */
+    if (name_or_icon_changed || hide_changed || antiflapping_changed) {
+        save_settings(plugin);
+        DEBUG_TRACE("  UI changes saved (name/icon/hide options/anti-flapping)");
+    }
+    
+    /* ===== 5. Проверяем D-Bus изменения ===== */
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         DEBUG_TRACE("  ASUSD not available, cannot apply D-Bus settings");
         if (!plugin->hide_notifications)
@@ -1007,7 +1249,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
     }
     
-    /* ===== 5. Если нет D-Bus изменений, завершаем ===== */
+    /* ===== 6. Если нет D-Bus изменений, завершаем ===== */
     gboolean dbus_changed = FALSE;
     if (new_ac_enabled != plugin->auto_switch_ac_enabled) dbus_changed = TRUE;
     if (new_battery_enabled != plugin->auto_switch_battery_enabled) dbus_changed = TRUE;
@@ -1017,7 +1259,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     
     if (!dbus_changed) {
         DEBUG_TRACE("  No D-Bus changes detected");
-        if (!name_or_icon_changed && !hide_changed) {
+        if (!name_or_icon_changed && !hide_changed && !antiflapping_changed) {
             if (!plugin->hide_notifications)
                 send_notification(_("No changes"), _("Settings are already up to date"), FALSE, "emblem-default");
         } else {
@@ -1031,7 +1273,7 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         return;
     }
     
-    /* ===== 6. Применяем D-Bus изменения через очередь ===== */
+    /* ===== 7. Применяем D-Bus изменения через очередь ===== */
     plugin->saving_settings = TRUE;
     
     SettingsApplyContext *ctx = g_new0(SettingsApplyContext, 1);

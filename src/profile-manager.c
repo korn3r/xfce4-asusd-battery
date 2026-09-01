@@ -113,15 +113,30 @@ gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
         return result;
     }
     
-    GPtrArray *names = g_ptr_array_new();
-    for (guint i = 0; i < plugin->profiles->len; i++) {
-        ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
-        const char *name = settings->name && strlen(settings->name) > 0 ? settings->name : settings->default_name;
-        if (name) g_ptr_array_add(names, g_strdup(name));
-    }
-    g_ptr_array_add(names, NULL);
+    /* Сортируем профили по enum_value */
+    GPtrArray *sorted = g_ptr_array_new();
     
-    return (gchar**)g_ptr_array_free(names, FALSE);
+    /* Находим максимальный enum_value */
+    guint32 max_enum = 0;
+    for (guint i = 0; i < plugin->profiles->len; i++) {
+        ProfileSettings *s = g_ptr_array_index(plugin->profiles, i);
+        if (s->enum_value > max_enum) max_enum = s->enum_value;
+    }
+    
+    /* Добавляем профили в порядке возрастания enum_value */
+    for (guint32 enum_val = 0; enum_val <= max_enum; enum_val++) {
+        for (guint i = 0; i < plugin->profiles->len; i++) {
+            ProfileSettings *s = g_ptr_array_index(plugin->profiles, i);
+            if (s->enum_value == enum_val) {
+                const char *name = s->name && strlen(s->name) > 0 ? s->name : s->default_name;
+                if (name) g_ptr_array_add(sorted, g_strdup(name));
+                break;
+            }
+        }
+    }
+    
+    g_ptr_array_add(sorted, NULL);
+    return (gchar**)g_ptr_array_free(sorted, FALSE);
 }
 
 void create_fallback_profiles(AsusdBatteryPlugin *plugin) {

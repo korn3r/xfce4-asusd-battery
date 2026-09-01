@@ -38,6 +38,18 @@ void send_notification(const gchar *summary, const gchar *body, gboolean is_erro
 
 gboolean can_send_notification(AsusdBatteryPlugin *plugin) {
     if (!plugin) return FALSE;
+    
+    /* Если уведомления скрыты — не отправляем */
+    if (plugin->hide_notifications) {
+        return FALSE;
+    }
+    
+    /* Если anti-flapping выключен — не блокируем уведомления */
+    if (!plugin->enable_antiflapping) {
+        return TRUE;
+    }
+    
+    /* Если anti-flapping включен — проверяем задержку */
     time_t now = time(NULL);
     if (now - plugin->last_notification_time < 2) return FALSE;
     plugin->last_notification_time = now;

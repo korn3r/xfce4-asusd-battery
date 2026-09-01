@@ -17,8 +17,17 @@ typedef struct _SettingsDialogState {
     GtkWidget *hide_icon_check;
     GtkWidget *hide_text_check;
     GtkWidget *notifications_check;
+    
+    /* Anti-flapping */
+    GtkWidget *antiflapping_check;
+    GtkWidget *custom_time_check;
+    GtkWidget *custom_time_entry;
+    GtkWidget *custom_time_error_label;
+    
     guint dialog_id;
     gboolean syncing_ui;
+    
+    /* Dirty flags */
     gboolean dirty_ac_enabled;
     gboolean dirty_battery_enabled;
     gboolean dirty_ac_profile;
@@ -26,6 +35,9 @@ typedef struct _SettingsDialogState {
     gboolean dirty_limit;
     gboolean dirty_name;
     gboolean dirty_icon;
+    gboolean dirty_antiflapping;
+    gboolean dirty_custom_time;
+    gboolean dirty_timeout;
 } SettingsDialogState;
 
 /* ========== Settings context for apply ========== */
@@ -63,6 +75,8 @@ void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
 void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *dialog);
 void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog);
 void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_antiflapping_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
+void on_custom_time_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
 
 /* ========== Internal functions ========== */
 

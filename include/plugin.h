@@ -66,6 +66,9 @@ struct _AsusdBatteryPlugin {
     gboolean hide_icon;
     gboolean hide_text;
     gboolean hide_notifications;
+    gboolean enable_antiflapping;
+    gboolean custom_time_enabled;
+    guint custom_timeout_ms;
     
     /* Dialog */
     gboolean settings_dialog_open;
@@ -81,6 +84,9 @@ struct _AsusdBatteryPlugin {
     
     /* Notifications */
     time_t last_notification_time;
+    guint notification_timeout_id;          /* ID таймера для задержки уведомления */
+    gchar *pending_notification_profile;    /* Профиль, для которого отложено уведомление */
+    gchar *last_notified_profile;           /* Последний профиль, о котором было уведомление */
     
     /* State */
     gboolean is_disposing;
