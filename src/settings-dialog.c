@@ -580,7 +580,6 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     GtkWidget *options_vbox;
     GtkWidget *options_hbox;
     GtkWidget *hide_label;
-    GtkWidget *separator;
     GtkWidget *antiflapping_frame;
     GtkWidget *antiflapping_vbox;
     GtkWidget *custom_time_hbox;
@@ -885,8 +884,6 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     gtk_box_pack_start(GTK_BOX(antiflapping_vbox), error_label, FALSE, FALSE, 0);
     
     /* Buttons */
-    separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_box_pack_start(GTK_BOX(main_vbox), separator, FALSE, FALSE, 5);
     button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_widget_set_halign(button_box, GTK_ALIGN_CENTER);
     gtk_box_pack_start(GTK_BOX(main_vbox), button_box, FALSE, FALSE, 0);
