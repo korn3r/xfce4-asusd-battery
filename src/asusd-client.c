@@ -136,7 +136,7 @@ void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_da
         return;
     }
     
-    DEBUG_INFO("xfce4-asusd-battery: Connected to ASUSD D-Bus service");
+    DEBUG_DEBUG("xfce4-asusd-battery: Connected to ASUSD D-Bus service");
     DEBUG_TRACE("xfce4-asusd-battery: Proxy created successfully");
     plugin->connection = g_dbus_proxy_get_connection(plugin->asusd_proxy);
     if (plugin->connection) g_object_ref(plugin->connection);
@@ -257,7 +257,7 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
                 if (!plugin->current_profile || g_strcmp0(plugin->current_profile, name) != 0) {
                     g_free(plugin->current_profile);
                     plugin->current_profile = g_strdup(name);
-                    DEBUG_INFO("xfce4-asusd-battery: Profile changed to: %s (via D-Bus signal)", name);
+                    DEBUG_DEBUG("xfce4-asusd-battery: Profile changed to: %s (via D-Bus signal)", name);
                     update_profile_display(plugin, TRUE);
                 }
             } else if (g_strcmp0(key, "ChargeControlEndThreshold") == 0) {
@@ -519,7 +519,7 @@ void on_property_set_done(GObject *source,
 
         g_error_free(error);
     } else {
-        DEBUG_INFO(
+        DEBUG_DEBUG(
             "xfce4-asusd-battery: Operation completed successfully: %s",
             ctx->method_name ? ctx->method_name : "unknown");
 
@@ -918,7 +918,7 @@ void on_profile_choices_loaded(GObject *source, GAsyncResult *res, gpointer user
     
     parse_profile_choices(plugin, value);
     g_variant_unref(value);
-    DEBUG_INFO("xfce4-asusd-battery: Loaded %d available performance profiles", plugin->profiles->len);
+    DEBUG_DEBUG("xfce4-asusd-battery: Loaded %d available performance profiles", plugin->profiles->len);
     
     if (!asusd_get_property_async(plugin, "PlatformProfile",
                                   (GAsyncReadyCallback)on_current_profile_loaded, plugin)) {
@@ -1012,7 +1012,7 @@ void on_current_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     g_free(plugin->current_profile);
     plugin->current_profile = g_strdup(name);
     plugin->asusd_state = ASUSD_STATE_AVAILABLE;
-    DEBUG_INFO("xfce4-asusd-battery: Current profile: %s", name);
+    DEBUG_DEBUG("xfce4-asusd-battery: Current profile: %s", name);
     update_profile_display(plugin, FALSE);
     
     if (plugin->init_load_state == 0) {
@@ -1060,7 +1060,7 @@ void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
                 g_variant_get(value, "y", &limit);
                 plugin->current_battery_limit = limit;
                 plugin->battery_limit_enabled = (limit == 80);
-                DEBUG_INFO("xfce4-asusd-battery: Battery charge limit: %d%%", limit);
+                DEBUG_DEBUG("xfce4-asusd-battery: Battery charge limit: %d%%", limit);
             }
             g_variant_unref(value);
         }
@@ -1106,7 +1106,7 @@ void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data)
             }
             if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
                 g_variant_get(value, "b", &plugin->auto_switch_ac_enabled);
-                DEBUG_INFO("xfce4-asusd-battery: Auto-switch on AC: %s", 
+                DEBUG_DEBUG("xfce4-asusd-battery: Auto-switch on AC: %s", 
                            plugin->auto_switch_ac_enabled ? "enabled" : "disabled");
             }
             g_variant_unref(value);
@@ -1157,7 +1157,7 @@ void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data
                 const gchar *name = profile_name_from_enum(plugin, enum_val);
                 g_free(plugin->auto_switch_ac_profile);
                 plugin->auto_switch_ac_profile = g_strdup(name);
-                DEBUG_INFO("xfce4-asusd-battery: AC profile: %s", name);
+                DEBUG_DEBUG("xfce4-asusd-battery: AC profile: %s", name);
             }
             g_variant_unref(value);
         }
@@ -1203,7 +1203,7 @@ void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_
             }
             if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
                 g_variant_get(value, "b", &plugin->auto_switch_battery_enabled);
-                DEBUG_INFO("xfce4-asusd-battery: Auto-switch on battery: %s", 
+                DEBUG_DEBUG("xfce4-asusd-battery: Auto-switch on battery: %s", 
                            plugin->auto_switch_battery_enabled ? "enabled" : "disabled");
             }
             g_variant_unref(value);
@@ -1254,7 +1254,7 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
                 const gchar *name = profile_name_from_enum(plugin, enum_val);
                 g_free(plugin->auto_switch_battery_profile);
                 plugin->auto_switch_battery_profile = g_strdup(name);
-                DEBUG_INFO("xfce4-asusd-battery: Battery profile: %s", name);
+                DEBUG_DEBUG("xfce4-asusd-battery: Battery profile: %s", name);
             }
             g_variant_unref(value);
         }
@@ -1270,7 +1270,7 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     plugin->asusd_init_retry_count = 0;
     plugin->reconnecting = FALSE;
     update_profile_display(plugin, FALSE);
-    DEBUG_INFO("xfce4-asusd-battery: ASUSD initialization completed");
+    DEBUG_DEBUG("xfce4-asusd-battery: ASUSD initialization completed");
     if (plugin->dialog_state && plugin->dialog_state->dialog)
         settings_dialog_sync_from_asusd(plugin, FALSE);
     
@@ -1309,7 +1309,7 @@ void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data) {
         g_free(error_message);
     } else {
         if (result) g_variant_unref(result);
-        DEBUG_INFO("xfce4-asusd-battery: One-shot full charge started");
+        DEBUG_DEBUG("xfce4-asusd-battery: One-shot full charge started");
         if (!plugin->hide_notifications)
             send_notification(_("One-shot full charge started"), _("The battery will charge to 100%% once."), FALSE, "battery-full-symbolic");
     }

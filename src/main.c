@@ -333,8 +333,12 @@ void load_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
+    if (!channel) {
+        DEBUG_WARN("Failed to get xfconf channel");
+        return;
+    }
     
+    /* Display options */
     plugin->hide_icon = xfconf_channel_get_bool(channel, "/hide_icon", FALSE);
     plugin->hide_text = xfconf_channel_get_bool(channel, "/hide_text", FALSE);
     plugin->hide_notifications = xfconf_channel_get_bool(channel, "/hide_notifications", FALSE);
@@ -343,11 +347,14 @@ void load_settings(AsusdBatteryPlugin *plugin) {
     plugin->enable_antiflapping = xfconf_channel_get_bool(channel, "/enable_antiflapping", FALSE);
     plugin->custom_time_enabled = xfconf_channel_get_bool(channel, "/custom_time_enabled", FALSE);
     plugin->custom_timeout_ms = xfconf_channel_get_uint(channel, "/custom_timeout_ms", 1500);
-    
     if (plugin->custom_timeout_ms == 0) {
         plugin->custom_timeout_ms = 1500;
     }
     
+    /* No battery — только в файле настроек, без UI */
+    plugin->no_battery = xfconf_channel_get_bool(channel, "/no_battery", FALSE);
+    
+    /* Загружаем пользовательские имена и иконки */
     if (plugin->profiles) {
         for (guint i = 0; i < plugin->profiles->len; i++) {
             ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
@@ -377,8 +384,12 @@ void save_settings(AsusdBatteryPlugin *plugin) {
     if (!plugin) return;
     
     XfconfChannel *channel = xfconf_channel_get(CONFIG_CHANNEL);
-    if (!channel) { DEBUG_WARN("Failed to get xfconf channel"); return; }
+    if (!channel) {
+        DEBUG_WARN("Failed to get xfconf channel");
+        return;
+    }
     
+    /* Display options */
     xfconf_channel_set_bool(channel, "/hide_icon", plugin->hide_icon);
     xfconf_channel_set_bool(channel, "/hide_text", plugin->hide_text);
     xfconf_channel_set_bool(channel, "/hide_notifications", plugin->hide_notifications);
@@ -388,10 +399,15 @@ void save_settings(AsusdBatteryPlugin *plugin) {
     xfconf_channel_set_bool(channel, "/custom_time_enabled", plugin->custom_time_enabled);
     xfconf_channel_set_uint(channel, "/custom_timeout_ms", plugin->custom_timeout_ms);
     
+    /* No battery — только в файле настроек, без UI */
+    xfconf_channel_set_bool(channel, "/no_battery", plugin->no_battery);
+    
+    /* Сохраняем пользовательские имена и иконки */
     if (plugin->profiles) {
         for (guint i = 0; i < plugin->profiles->len; i++) {
             ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
             
+            /* Сохраняем имя */
             gchar *key = g_strdup_printf("/profile_%d_name", settings->enum_value);
             if (settings->name && strlen(settings->name) > 0) {
                 xfconf_channel_set_string(channel, key, settings->name);
@@ -400,7 +416,9 @@ void save_settings(AsusdBatteryPlugin *plugin) {
             }
             g_free(key);
             
+            /* Сохраняем иконку — только если она НЕ является иконкой по умолчанию */
             key = g_strdup_printf("/profile_%d_icon", settings->enum_value);
+            
             const char *default_icon = NULL;
             if (g_strcmp0(settings->default_name, "performance") == 0) {
                 default_icon = "battery-full-symbolic";
@@ -552,7 +570,7 @@ void create_about_dialog(AsusdBatteryPlugin *plugin) {
 void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     debug_init();
     DEBUG_TRACE_ENTER();
-    DEBUG_INFO("Initializing ASUS Battery plugin v%s", VERSION);
+    DEBUG_DEBUG("Initializing ASUS Battery plugin v%s", VERSION);
 
     DEBUG_DEBUG("xfce4-asusd-battery: D-Bus interface configuration:");
     DEBUG_DEBUG("  ASUSD_BUS_NAME       = %s", "xyz.ljones.Asusd");

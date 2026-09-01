@@ -25,6 +25,7 @@ typedef enum {
 
 struct _AsusdBatteryPlugin {
     GObject parent;
+    gboolean no_battery;
     
     /* Xfce panel */
     XfcePanelPlugin *plugin;
@@ -84,9 +85,9 @@ struct _AsusdBatteryPlugin {
     
     /* Notifications */
     time_t last_notification_time;
-    guint notification_timeout_id;          /* ID таймера для задержки уведомления */
-    gchar *pending_notification_profile;    /* Профиль, для которого отложено уведомление */
-    gchar *last_notified_profile;           /* Последний профиль, о котором было уведомление */
+    guint notification_timeout_id;
+    gchar *pending_notification_profile;
+    gchar *last_notified_profile;
     
     /* State */
     gboolean is_disposing;

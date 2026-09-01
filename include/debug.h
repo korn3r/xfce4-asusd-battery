@@ -26,7 +26,6 @@ void debug_log(DebugLevel level, const char *file, int line, const char *func, c
 
 #define DEBUG_TRACE(...) debug_log(DEBUG_LEVEL_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define DEBUG_DEBUG(...) debug_log(DEBUG_LEVEL_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define DEBUG_INFO(...)  debug_log(DEBUG_LEVEL_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define DEBUG_WARN(...)  debug_log(DEBUG_LEVEL_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define DEBUG_ERROR(...) debug_log(DEBUG_LEVEL_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
