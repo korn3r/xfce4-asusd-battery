@@ -2,7 +2,9 @@
 #include "utils.h"
 #include "plugin.h"
 #include "debug.h"
-#include "config.h"  /* <-- ДОБАВИТЬ ЭТОТ INCLUDE */
+#include <locale.h>
+#include <libintl.h>
+#include "config.h"
 
 #include <libxfce4util/libxfce4util.h>
 #include <libnotify/notify.h>

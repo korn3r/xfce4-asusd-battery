@@ -57,6 +57,8 @@ HEADERS = include/plugin.h include/utils.h include/profile-manager.h include/asu
 TARGET = libxfce4-asusd-battery.so
 PLUGIN_NAME = xfce4-asusd-battery
 
+# ========== ОСНОВНЫЕ ЦЕЛИ ==========
+
 all: $(TARGET) translations
 
 $(TARGET): $(SOURCES) $(HEADERS)
@@ -64,7 +66,78 @@ $(TARGET): $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) -Iinclude $(LDFLAGS) -o $(TARGET) $(SOURCES)
 	@echo "✓ Build complete: $(TARGET)"
 
-# ========== Сборка переводов ==========
+# ========== ОТЛАДОЧНАЯ СБОРКА ==========
+
+# Флаги для отладки с подавлением предупреждений из системных заголовков
+# -Wno-unused-parameter НЕ используется, так как все параметры помечены G_GNUC_UNUSED
+DEBUG_CFLAGS = -g -O0 -DDEBUG \
+               -Wall -Wextra -Wpedantic \
+               -Wno-variadic-macros
+
+debug: CFLAGS += $(DEBUG_CFLAGS)
+debug: LDFLAGS += -g
+debug: $(TARGET) translations
+	@echo "✓ Debug build complete with symbols"
+	@echo "  Plugin size: $(shell du -h $(TARGET) | cut -f1)"
+
+# Сборка с AddressSanitizer (для поиска ошибок памяти)
+asan: CC = clang
+asan: CFLAGS += -g -O0 -DDEBUG \
+                -fsanitize=address -fsanitize=undefined \
+                -fno-omit-frame-pointer \
+                -Wno-variadic-macros
+asan: LDFLAGS += -g -fsanitize=address -fsanitize=undefined
+asan: $(TARGET) translations
+	@echo "✓ ASAN build complete"
+	@echo "  Run with: ASAN_OPTIONS=detect_leaks=1 xfce4-panel"
+
+# Сборка с профилировкой
+profile: CFLAGS += -pg -g -O0 -Wno-variadic-macros
+profile: LDFLAGS += -pg
+profile: $(TARGET) translations
+	@echo "✓ Profiling build complete"
+
+# ========== ЦЕЛИ ДЛЯ VALGRIND ТЕСТИРОВАНИЯ ==========
+
+# Запуск Valgrind на панели с плагином
+valgrind-test: debug
+	@echo "============================================================"
+	@echo "  Running Valgrind test on XFCE4 panel with plugin"
+	@echo "============================================================"
+	@echo "  Stopping current panel..."
+	@xfce4-panel -q 2>/dev/null || true
+	@echo "  Starting panel under Valgrind..."
+	@echo "  Log file: valgrind_panel_$$(date +%Y%m%d_%H%M%S).log"
+	@echo "  Press Ctrl+C to stop the panel and see results"
+	@echo "============================================================"
+	valgrind --leak-check=full \
+	         --show-leak-kinds=all \
+	         --track-origins=yes \
+	         --verbose \
+	         --log-file=valgrind_panel_$$(date +%Y%m%d_%H%M%S).log \
+	         --suppressions=/usr/share/glib-2.0/valgrind/glib.supp \
+	         xfce4-panel
+
+# Генерация отчета по логам Valgrind
+valgrind-report:
+	@echo "============================================================"
+	@echo "  Valgrind Report Summary"
+	@echo "============================================================"
+	@for log in valgrind_*.log; do \
+		if [ -f "$$log" ]; then \
+			echo ""; \
+			echo "=== $$log ==="; \
+			echo "--- Leak Summary ---"; \
+			grep -E "definitely lost|indirectly lost|possibly lost|still reachable" "$$log" | grep -v "0 bytes" || echo "  No leaks found"; \
+			echo "--- Errors ---"; \
+			grep -E "Invalid read|Invalid write|Conditional jump|Use of uninitialised" "$$log" | head -5 || echo "  No errors found"; \
+			echo "--- Total errors ---"; \
+			grep "ERROR SUMMARY" "$$log" || true; \
+		fi; \
+	done
+
+# ========== СБОРКА ПЕРЕВОДОВ ==========
+
 translations:
 	@if [ -z "$(LANGUAGES)" ]; then \
 		echo "No languages specified, skipping translations"; \
@@ -85,7 +158,8 @@ translations:
 		done; \
 	fi
 
-# ========== Принудительная сборка переводов ==========
+# ========== ПРИНУДИТЕЛЬНАЯ СБОРКА ПЕРЕВОДОВ ==========
+
 force-translations:
 	@echo "Forcing translation build..."
 	@if [ "$(HAVE_MSGFMT)" != "yes" ]; then \
@@ -102,7 +176,8 @@ force-translations:
 		fi; \
 	done
 
-# ========== Установка ==========
+# ========== УСТАНОВКА ==========
+
 install: $(TARGET) translations
 	@echo "Installing $(TARGET)..."
 	@echo "  Source:  $(shell pwd)/$(TARGET)"
@@ -182,7 +257,8 @@ install: $(TARGET) translations
 	@echo "    2. Add 'ASUS Battery' to your panel"
 	@echo ""
 
-# ========== Установка только переводов ==========
+# ========== УСТАНОВКА ТОЛЬКО ПЕРЕВОДОВ ==========
+
 install-translations:
 	@echo "Installing translations only..."
 	@if [ -d locale ] && [ -n "$(LANGUAGES)" ]; then \
@@ -203,7 +279,8 @@ install-translations:
 		echo "  Run 'make translations' or 'make force-translations' first"; \
 	fi
 
-# ========== Удаление ==========
+# ========== УДАЛЕНИЕ ==========
+
 uninstall:
 	@echo "Uninstalling $(TARGET)..."
 	rm -f $(DESTDIR)$(PLUGIN_DIR)/$(TARGET)
@@ -224,14 +301,16 @@ uninstall:
 	fi
 	@echo "✓ Uninstall complete"
 
-# ========== Очистка ==========
+# ========== ОЧИСТКА ==========
+
 clean:
 	@echo "Cleaning..."
 	rm -f $(TARGET)
 	rm -rf locale
 	@echo "✓ Clean complete"
 
-# ========== Информация ==========
+# ========== ИНФОРМАЦИЯ ==========
+
 info:
 	@echo "============================================================"
 	@echo "  xfce4-asusd-battery build information"
@@ -246,7 +325,8 @@ info:
 	@echo "  Languages:           $(LANGUAGES)"
 	@echo "============================================================"
 
-# ========== Проверка зависимостей ==========
+# ========== ПРОВЕРКА ЗАВИСИМОСТЕЙ ==========
+
 check:
 	@echo "Checking dependencies..."
 	@for pkg in glib-2.0 gtk+-3.0 libxfce4panel-2.0 libxfce4util-1.0 libxfconf-0 gio-2.0; do \
@@ -271,4 +351,4 @@ check:
 		echo "  ✗ msgfmt NOT available (install gettext)"; \
 	fi
 
-.PHONY: all clean install uninstall install-translations translations force-translations info check
+.PHONY: all clean install uninstall install-translations translations force-translations info check debug asan profile valgrind-test valgrind-report
