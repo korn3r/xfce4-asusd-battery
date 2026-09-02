@@ -250,6 +250,21 @@ void on_proxy_properties_changed(GDBusProxy *proxy,
         g_variant_iter_init(&iter, changed_properties);
         while (g_variant_iter_next(&iter, "{sv}", &key, &value)) {
             DEBUG_TRACE("xfce4-asusd-battery:   changed property: %s", key);
+            
+            /* Если battery functionality отключена — пропускаем battery-свойства */
+            if (plugin->no_battery) {
+                if (g_strcmp0(key, "ChargeControlEndThreshold") == 0 ||
+                    g_strcmp0(key, "ChangePlatformProfileOnAc") == 0 ||
+                    g_strcmp0(key, "PlatformProfileOnAc") == 0 ||
+                    g_strcmp0(key, "ChangePlatformProfileOnBattery") == 0 ||
+                    g_strcmp0(key, "PlatformProfileOnBattery") == 0) {
+                    DEBUG_DEBUG("xfce4-asusd-battery:   Skipping battery property '%s' (no_battery enabled)", key);
+                    g_free(key);
+                    g_variant_unref(value);
+                    continue;
+                }
+            }
+            
             if (g_strcmp0(key, "PlatformProfile") == 0) {
                 guint32 enum_val;
                 g_variant_get(value, "u", &enum_val);
@@ -1041,6 +1056,13 @@ void on_limit_loaded(GObject *source, GAsyncResult *res, gpointer user_data) {
         return;
     }
     
+    /* Если battery functionality отключена — пропускаем */
+    if (plugin->no_battery) {
+        DEBUG_DEBUG("xfce4-asusd-battery: Battery functionality disabled, skipping limit load");
+        g_object_unref(plugin);
+        return;
+    }
+    
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
@@ -1090,6 +1112,13 @@ void on_ac_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_data)
         return;
     }
     
+    /* Если battery functionality отключена — пропускаем */
+    if (plugin->no_battery) {
+        DEBUG_DEBUG("xfce4-asusd-battery: Battery functionality disabled, skipping ac switch load");
+        g_object_unref(plugin);
+        return;
+    }
+    
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
@@ -1133,6 +1162,13 @@ void on_ac_profile_loaded(GObject *source, GAsyncResult *res, gpointer user_data
     
     if (g_cancellable_is_cancelled(plugin->cancellable)) {
         DEBUG_TRACE("xfce4-asusd-battery: Operation cancelled, discarding ac profile callback");
+        g_object_unref(plugin);
+        return;
+    }
+    
+    /* Если battery functionality отключена — пропускаем */
+    if (plugin->no_battery) {
+        DEBUG_DEBUG("xfce4-asusd-battery: Battery functionality disabled, skipping ac profile load");
         g_object_unref(plugin);
         return;
     }
@@ -1187,6 +1223,13 @@ void on_battery_switch_loaded(GObject *source, GAsyncResult *res, gpointer user_
         return;
     }
     
+    /* Если battery functionality отключена — пропускаем */
+    if (plugin->no_battery) {
+        DEBUG_DEBUG("xfce4-asusd-battery: Battery functionality disabled, skipping battery switch load");
+        g_object_unref(plugin);
+        return;
+    }
+    
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
@@ -1234,6 +1277,13 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
         return;
     }
     
+    /* Если battery functionality отключена — пропускаем */
+    if (plugin->no_battery) {
+        DEBUG_DEBUG("xfce4-asusd-battery: Battery functionality disabled, skipping battery profile load");
+        g_object_unref(plugin);
+        return;
+    }
+    
     GError *error = NULL;
     GVariant *result = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
     if (error) {
@@ -1274,9 +1324,8 @@ void on_battery_profile_loaded(GObject *source, GAsyncResult *res, gpointer user
     if (plugin->dialog_state && plugin->dialog_state->dialog)
         settings_dialog_sync_from_asusd(plugin, FALSE);
     
-    /* Resume processing queue if there are pending operations */
     if (!g_queue_is_empty(plugin->operation_queue)) {
-        DEBUG_TRACE("xfce4-asusd-battery: Resuming operation queue (%u operations)", 
+        DEBUG_DEBUG("xfce4-asusd-battery: Resuming operation queue (%u operations)", 
                     g_queue_get_length(plugin->operation_queue));
         process_next_operation(plugin);
     }

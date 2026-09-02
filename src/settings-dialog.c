@@ -1230,15 +1230,23 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     gboolean new_antiflapping = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->antiflapping_check));
     gboolean new_custom_time = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->custom_time_check));
     guint new_timeout = plugin->custom_timeout_ms;
-    
+
+    /* Валидируем поле ввода */
     if (state->custom_time_entry && gtk_widget_get_sensitive(state->custom_time_entry)) {
-        const gchar *timeout_text = gtk_entry_get_text(GTK_ENTRY(state->custom_time_entry));
-        if (timeout_text && strlen(timeout_text) > 0) {
-            gchar *endptr;
-            gulong val = strtoul(timeout_text, &endptr, 10);
-            if (*endptr == '\0' && val > 0 && val <= 60000) {
-                new_timeout = (guint)val;
+        guint validated_timeout;
+        if (validate_custom_time(GTK_ENTRY(state->custom_time_entry), 
+                                 GTK_LABEL(state->custom_time_error_label), 
+                                 &validated_timeout)) {
+            new_timeout = validated_timeout;
+        } else {
+            /* Невалидное значение — показываем ошибку и не применяем */
+            DEBUG_WARN("  Invalid custom timeout value, not applying");
+            if (!plugin->hide_notifications) {
+                send_notification(_("Invalid value"), 
+                                 _("Timeout must be between 100 and 5000 ms"), 
+                                 TRUE, "dialog-error");
             }
+            return;
         }
     }
     
