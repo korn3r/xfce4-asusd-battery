@@ -491,11 +491,13 @@ void on_property_set_done(GObject *source,
             callback(source, NULL, ctx->user_data);
         }
 
-        g_object_unref(plugin);
+        /* ctx must be freed before continuing queue */
         async_call_context_unref(ctx);
-        
-        /* Continue processing queue even on cancellation */
+
+        /* process_next_operation() uses the strong plugin reference */
         process_next_operation(plugin);
+
+        g_object_unref(plugin);
         return;
     }
 
@@ -520,11 +522,14 @@ void on_property_set_done(GObject *source,
 
                 g_error_free(error);
                 g_object_unref(plugin);
+                /* ctx is NOT re-queued, must free it */
                 async_call_context_unref(ctx);
                 return;
             }
 
-            /* Re-queue the operation — DO NOT increment refcount! */
+            /* Re-queue the operation — DO NOT increment refcount!
+             * ctx is now owned by the queue, do NOT unref it.
+             * DO NOT access ctx after this point! */
             g_queue_push_head(plugin->operation_queue, ctx);
 
             plugin->reconnecting = TRUE;
@@ -532,7 +537,7 @@ void on_property_set_done(GObject *source,
 
             asusd_init_async(plugin);
 
-            /* ctx is now owned by the queue, do NOT unref it */
+            /* ctx is now owned by the queue, so no async_call_context_unref(ctx) here */
             g_object_unref(plugin);
             return;
         }
@@ -564,12 +569,12 @@ void on_property_set_done(GObject *source,
             g_variant_unref(result);
     }
 
-    /* Free current ctx */
+    /* Free ctx, then continue queue while strong plugin ref is alive */
     async_call_context_unref(ctx);
-    g_object_unref(plugin);
-    
-    /* Continue processing queue */
+
     process_next_operation(plugin);
+
+    g_object_unref(plugin);
 }
 
 void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
