@@ -101,9 +101,16 @@ void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
 }
 
 void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
+    /* user_data is the plugin ref from g_object_ref(plugin) */
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(user_data);
     if (!plugin) {
-        DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed, discarding proxy callback");
+        DEBUG_TRACE("xfce4-asusd-battery: Plugin is NULL, discarding proxy callback");
+        return;
+    }
+    
+    if (plugin->is_disposing) {
+        DEBUG_TRACE("xfce4-asusd-battery: Plugin disposing, discarding proxy callback");
+        g_object_unref(plugin);
         return;
     }
     
@@ -189,9 +196,16 @@ void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
 }
 
 void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
-    AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
+    /* user_data is the plugin ref from g_object_ref(plugin) */
+    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(user_data);
     if (!plugin) {
-        DEBUG_TRACE("xfce4-asusd-battery: Plugin destroyed, discarding proxy callback");
+        DEBUG_TRACE("xfce4-asusd-battery: Plugin is NULL, discarding proxy callback");
+        return;
+    }
+    
+    if (plugin->is_disposing) {
+        DEBUG_TRACE("xfce4-asusd-battery: Plugin disposing, discarding proxy callback");
+        g_object_unref(plugin);
         return;
     }
     
@@ -479,6 +493,9 @@ void on_property_set_done(GObject *source,
 
         g_object_unref(plugin);
         async_call_context_unref(ctx);
+        
+        /* Continue processing queue even on cancellation */
+        process_next_operation(plugin);
         return;
     }
 
@@ -507,15 +524,15 @@ void on_property_set_done(GObject *source,
                 return;
             }
 
-            /* Re-queue the operation before reconnect */
+            /* Re-queue the operation — DO NOT increment refcount! */
             g_queue_push_head(plugin->operation_queue, ctx);
-            async_call_context_ref(ctx);
 
             plugin->reconnecting = TRUE;
             g_error_free(error);
 
             asusd_init_async(plugin);
 
+            /* ctx is now owned by the queue, do NOT unref it */
             g_object_unref(plugin);
             return;
         }
@@ -547,8 +564,12 @@ void on_property_set_done(GObject *source,
             g_variant_unref(result);
     }
 
-    g_object_unref(plugin);
+    /* Free current ctx */
     async_call_context_unref(ctx);
+    g_object_unref(plugin);
+    
+    /* Continue processing queue */
+    process_next_operation(plugin);
 }
 
 void asusd_call_async(AsusdBatteryPlugin *plugin, const char *method,
