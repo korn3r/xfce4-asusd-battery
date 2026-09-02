@@ -100,7 +100,7 @@ void create_asusd_proxy_async(AsusdBatteryPlugin *plugin) {
     );
 }
 
-void on_asusd_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
+void on_asusd_proxy_created(G_GNUC_UNUSED GObject *source, GAsyncResult *res, gpointer user_data) {
     /* user_data is the plugin ref from g_object_ref(plugin) */
     AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(user_data);
     if (!plugin) {
@@ -195,7 +195,7 @@ void create_upower_proxy_async(AsusdBatteryPlugin *plugin) {
     );
 }
 
-void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_data) {
+void on_upower_proxy_created(G_GNUC_UNUSED GObject *source, GAsyncResult *res, gpointer user_data) {
     /* user_data is the plugin ref from g_object_ref(plugin) */
     AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(user_data);
     if (!plugin) {
@@ -234,7 +234,7 @@ void on_upower_proxy_created(GObject *source, GAsyncResult *res, gpointer user_d
 
 void on_proxy_properties_changed(GDBusProxy *proxy,
                                  GVariant *changed_properties,
-                                 GStrv invalidated_properties,
+                                 G_GNUC_UNUSED GStrv invalidated_properties,
                                  gpointer user_data) {
     AsusdBatteryPlugin *plugin = get_plugin_ref(user_data);
     if (!plugin || !changed_properties || plugin->is_disposing) {

@@ -1,4 +1,4 @@
-/* src/main.c */
+	/* src/main.c */
 #include "plugin.h"
 #include "utils.h"
 #include "profile-manager.h"
@@ -316,7 +316,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     
     if (profile_changed && profile && g_strcmp0(profile, "unknown") != 0 && can_send_notification(plugin)) {
         DEBUG_TRACE("  >>> SCHEDULING NOTIFICATION for profile: %s", profile);
-        schedule_notification(plugin, display_profile);
+        schedule_notification(plugin, profile);
     }
     DEBUG_TRACE("=== end update_profile_display ===");
 }
@@ -435,7 +435,7 @@ void save_settings(AsusdBatteryPlugin *plugin) {
 
 /* ========== UI Callbacks ========== */
 
-void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
+void on_button_clicked(G_GNUC_UNUSED GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
     
@@ -542,7 +542,7 @@ void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data)
     g_object_unref(plugin);
 }
 
-gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin) {
+gboolean on_button_press(G_GNUC_UNUSED GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return FALSE;
     if (event->button == 3) {
         GtkWidget *menu = gtk_menu_new();
@@ -560,12 +560,12 @@ gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryP
     return FALSE;
 }
 
-void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
+void on_menu_configure(G_GNUC_UNUSED GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
     if (!plugin || plugin->is_disposing) return; 
     create_settings_dialog(plugin); 
 }
 
-void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
+void on_menu_about(G_GNUC_UNUSED GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
     if (!plugin || plugin->is_disposing) return; 
     create_about_dialog(plugin); 
 }
@@ -626,6 +626,10 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     /* 2. Затем загружаем настройки из xfconf (перезаписывают значения по умолчанию) */
     load_settings(plugin_data);
     
+    DEBUG_DEBUG("Loaded settings: hide_icon=%d, hide_text=%d, hide_notifications=%d", 
+                plugin_data->hide_icon, plugin_data->hide_text, plugin_data->hide_notifications);
+    
+    /* 3. Создаем виджеты */
     plugin_data->button = gtk_button_new();
     if (!plugin_data->button) { DEBUG_WARN("Failed to create button"); g_object_unref(plugin_data); return; }
     gtk_button_set_relief(GTK_BUTTON(plugin_data->button), GTK_RELIEF_NONE);
@@ -638,15 +642,37 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
     plugin_data->label = gtk_label_new(NULL);
     gtk_box_pack_start(GTK_BOX(plugin_data->box), plugin_data->label, FALSE, FALSE, 0);
     
+    /* 4. Сначала показываем все виджеты */
+    gtk_widget_show_all(plugin_data->button);
+    
+    /* 5. Затем применяем настройки видимости (скрываем если нужно) */
+    if (plugin_data->hide_icon) {
+        gtk_widget_hide(plugin_data->image);
+        DEBUG_DEBUG("Hiding icon at startup (hide_icon=%d)", plugin_data->hide_icon);
+    }
+    if (plugin_data->hide_text) {
+        gtk_widget_hide(plugin_data->label);
+        DEBUG_DEBUG("Hiding text at startup (hide_text=%d)", plugin_data->hide_text);
+    }
+    
+    /* 6. Обновляем содержимое (текст и иконку) */
     update_profile_display(plugin_data, FALSE);
     
-    /* 3. Инициализируем ASUSD (parse_profile_choices НЕ перезаписывает существующие профили) */
+    /* 7. ЕЩЕ РАЗ применяем настройки видимости после update_profile_display */
+    if (plugin_data->hide_icon) {
+        gtk_widget_hide(plugin_data->image);
+    }
+    if (plugin_data->hide_text) {
+        gtk_widget_hide(plugin_data->label);
+    }
+    
+    /* 8. Инициализируем ASUSD */
     asusd_init_async(plugin_data);
     
     g_signal_connect(G_OBJECT(plugin_data->button), "clicked", G_CALLBACK(on_button_clicked), plugin_data);
     g_signal_connect(G_OBJECT(plugin_data->button), "button-press-event", G_CALLBACK(on_button_press), plugin_data);
     gtk_container_add(GTK_CONTAINER(plugin), plugin_data->button);
-    gtk_widget_show_all(plugin_data->button);
+    
     create_upower_proxy_async(plugin_data);
     
     g_object_set_data_full(G_OBJECT(plugin), "plugin_data", plugin_data, (GDestroyNotify)g_object_unref);

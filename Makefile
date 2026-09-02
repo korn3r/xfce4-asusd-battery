@@ -189,13 +189,13 @@ install: $(TARGET) translations
 	@echo "  Path:    $(PLUGIN_DIR)"
 	
 	# Установка плагина
-	mkdir -p $(DESTDIR)$(PLUGIN_DIR)
-	install -Dm755 $(TARGET) $(DESTDIR)$(PLUGIN_DIR)/$(TARGET)
+	@mkdir -p $(DESTDIR)$(PLUGIN_DIR)
+	@install -Dm755 $(TARGET) $(DESTDIR)$(PLUGIN_DIR)/$(TARGET)
 	@echo "✓ Plugin installed"
 	
 	# Установка .desktop файла
-	mkdir -p $(DESTDIR)$(DESKTOP_DIR)
-	if [ -f "$(PLUGIN_NAME).desktop" ]; then \
+	@mkdir -p $(DESTDIR)$(DESKTOP_DIR)
+	@if [ -f "$(PLUGIN_NAME).desktop" ]; then \
 		install -m 644 $(PLUGIN_NAME).desktop $(DESTDIR)$(DESKTOP_DIR)/; \
 		echo "✓ Desktop file installed"; \
 	else \

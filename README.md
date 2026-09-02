@@ -74,38 +74,6 @@ or compile yourself:
 git clone https://github.com/korn3r/xfce4-asusd-battery.git
 cd xfce4-asusd-battery
 ```
-#### Bundled help screen
-
-```
-# make help
-
-Available targets:
-  all                  - Build plugin and translations
-  install              - Install plugin and translations
-  install-translations - Install only translations (from locale/ directory)
-  uninstall            - Uninstall plugin
-  clean                - Remove built files (including locale/ directory)
-  debug                - Build with debug symbols
-  translations         - Build translations (checks if already built)
-  force-translations   - Force rebuild translations
-  info                 - Show build information
-  check                - Check dependencies
-  help                 - Show this help
-
-Variables:
-  LANGUAGES            - Space-separated list of languages (e.g. 'ru de fr')
-  DESTDIR              - Installation prefix (e.g. DESTDIR=/tmp/test)
-
-Examples:
-  make                           - Build with all languages
-  make LANGUAGES="ru de"         - Build with Russian and German only
-  make LANGUAGES=""              - Build without translations
-  make force-translations        - Force rebuild all translations
-  sudo make install              - Install plugin
-  sudo make install-translations - Install translations from locale/ directory
-
-
-```
 
 ## Build and install
 ```
@@ -115,7 +83,6 @@ sudo make install
 # Restart the panel
 xfce4-panel -r
 ```
-
 ## Uninstall
 
 ```
@@ -148,6 +115,10 @@ For each profile, you can customize:
 - Hide icon: Show only text on the panel
 - Hide text: Show only icon on the panel
 - Hide notifications: Dont show app notifications
+
+# Anti-flapping
+
+- Enable timeout during which frequent profile changes are ignored ( for example switch Balanced->Performance->Balanced that happens in given timeout would be ignored). Helpful if you have faulty charging cable\port and laptop tends to switch on its own. 
 
 # License
 

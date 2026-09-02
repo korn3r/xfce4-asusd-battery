@@ -980,7 +980,7 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
 
 /* ========== Callbacks диалога ========== */
 
-void on_close_button_clicked(GtkButton *button, GtkWidget *dialog) {
+void on_close_button_clicked(G_GNUC_UNUSED GtkButton *button, GtkWidget *dialog) {
     DEBUG_TRACE("=== on_close_button_clicked: closing dialog ===");
     gtk_widget_destroy(dialog);
 }
@@ -1100,7 +1100,7 @@ void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) 
     }
 }
 
-void on_auto_switch_toggled(GtkToggleButton *toggle_button, GtkWidget *dialog) {
+void on_auto_switch_toggled(G_GNUC_UNUSED GtkToggleButton *toggle_button, GtkWidget *dialog) {
     GtkWidget *check_ac = g_object_get_data(G_OBJECT(dialog), "check_ac");
     GtkWidget *check_battery = g_object_get_data(G_OBJECT(dialog), "check_battery");
     GtkWidget *combo_ac = g_object_get_data(G_OBJECT(dialog), "combo_ac");
@@ -1171,7 +1171,7 @@ void on_custom_time_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     validate_custom_time(GTK_ENTRY(widget), GTK_LABEL(state->custom_time_error_label), &dummy);
 }
 
-void on_one_shot_clicked(GtkButton *button, GtkWidget *dialog) {
+void on_one_shot_clicked(G_GNUC_UNUSED GtkButton *button, GtkWidget *dialog) {
     GtkWidget *message_dialog;
     gint response;
     AsusdBatteryPlugin *plugin = g_object_get_data(G_OBJECT(dialog), "plugin");
@@ -1245,12 +1245,10 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (!state) return;
     
     /* ===== 0. Проверяем, есть ли вообще изменения ===== */
-    gboolean has_changes = FALSE;
     if (state->dirty_ac_enabled || state->dirty_battery_enabled || 
         state->dirty_ac_profile || state->dirty_battery_profile || 
         state->dirty_limit || state->dirty_name || state->dirty_icon ||
         state->dirty_antiflapping || state->dirty_custom_time || state->dirty_timeout) {
-        has_changes = TRUE;
         DEBUG_TRACE("  Changes detected in dialog");
     } else {
         DEBUG_TRACE("  No changes detected in dialog, showing notification");
