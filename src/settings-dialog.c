@@ -929,13 +929,17 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     GtkWidget *custom_time_entry = gtk_entry_new();
     gchar *timeout_text = g_strdup_printf("%u", plugin->custom_timeout_ms);
     gtk_entry_set_text(GTK_ENTRY(custom_time_entry), timeout_text);
-    gtk_entry_set_placeholder_text(GTK_ENTRY(custom_time_entry), _("1500"));
+    g_free(timeout_text);
+
+    char default_timeout_str[8];
+    snprintf(default_timeout_str, sizeof(default_timeout_str), "%d", DEFAULT_TIMEOUT_MS);
+    gtk_entry_set_placeholder_text(GTK_ENTRY(custom_time_entry), default_timeout_str);
+
     gtk_entry_set_width_chars(GTK_ENTRY(custom_time_entry), 4);
     gtk_widget_set_size_request(custom_time_entry, 60, -1);
     gtk_widget_set_sensitive(custom_time_entry, plugin->custom_time_enabled && plugin->enable_antiflapping);
     state->custom_time_entry = custom_time_entry;
     gtk_box_pack_start(GTK_BOX(custom_time_hbox), custom_time_entry, FALSE, FALSE, 0);
-    g_free(timeout_text);
     g_signal_connect(G_OBJECT(custom_time_entry), "changed", G_CALLBACK(on_custom_time_changed), plugin);
     g_signal_connect(G_OBJECT(custom_time_entry), "changed", G_CALLBACK(on_any_setting_changed), plugin);
     
@@ -1331,27 +1335,28 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     /* ===== 3. Применяем anti-flapping настройки ===== */
     gboolean new_antiflapping = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->antiflapping_check));
     gboolean new_custom_time = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->custom_time_check));
-    guint new_timeout = plugin->custom_timeout_ms;
+    guint new_timeout = DEFAULT_TIMEOUT_MS;  /* ← теперь по умолчанию */
 
-    /* Валидируем поле ввода */
-    if (state->custom_time_entry && gtk_widget_get_sensitive(state->custom_time_entry)) {
-        guint validated_timeout;
-        if (validate_custom_time(GTK_ENTRY(state->custom_time_entry), 
-                                 GTK_LABEL(state->custom_time_error_label), 
-                                 &validated_timeout)) {
-            new_timeout = validated_timeout;
-        } else {
-            /* Невалидное значение — показываем ошибку и не применяем */
-            DEBUG_WARN("  Invalid custom timeout value, not applying");
-            if (!plugin->hide_notifications) {
-                send_notification(_("Invalid value"), 
-                                 _("Timeout must be between 100 and 5000 ms"), 
-                                 TRUE, "dialog-error");
+    /* Если Custom time включен — берем значение из поля */
+    if (new_custom_time) {
+        if (state->custom_time_entry && gtk_widget_get_sensitive(state->custom_time_entry)) {
+            guint validated_timeout;
+            if (validate_custom_time(GTK_ENTRY(state->custom_time_entry), 
+                                     GTK_LABEL(state->custom_time_error_label), 
+                                     &validated_timeout)) {
+                new_timeout = validated_timeout;
+            } else {
+                DEBUG_WARN("  Invalid custom timeout value, not applying");
+                if (!plugin->hide_notifications) {
+                    send_notification(_("Invalid value"), 
+                                     _("Timeout must be between 100 and 5000 ms"), 
+                                     TRUE, "dialog-error");
+                }
+                return;
             }
-            return;
         }
     }
-    
+
     gboolean antiflapping_changed = FALSE;
     if (new_antiflapping != plugin->enable_antiflapping) {
         plugin->enable_antiflapping = new_antiflapping;
@@ -1364,8 +1369,8 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     if (new_timeout != plugin->custom_timeout_ms) {
         plugin->custom_timeout_ms = new_timeout;
         antiflapping_changed = TRUE;
+        DEBUG_DEBUG("custom_timeout_ms changed to: %d (custom_time=%d)", new_timeout, new_custom_time);
     }
-    
     /* ===== 4. Сохраняем UI изменения в xfconf ===== */
     if (name_or_icon_changed || hide_changed || antiflapping_changed) {
         save_settings(plugin);

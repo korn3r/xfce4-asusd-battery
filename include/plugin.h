@@ -11,6 +11,9 @@ G_BEGIN_DECLS
 #define ASUSD_STATE_CONNECTING  1
 #define ASUSD_STATE_AVAILABLE   2
 
+/* Anti-flapping */
+#define DEFAULT_TIMEOUT_MS 1500
+
 /* ========== GObject определения ========== */
 
 #define ASUSD_TYPE_BATTERY_PLUGIN (asusd_battery_plugin_get_type())

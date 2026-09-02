@@ -100,7 +100,6 @@ static gboolean send_delayed_notification(gpointer user_data) {
     
     plugin->notification_timeout_id = 0;
     
-    /* Если уведомления скрыты — не отправляем */
     if (plugin->hide_notifications) {
         g_free(plugin->pending_notification_profile);
         plugin->pending_notification_profile = NULL;
@@ -112,19 +111,33 @@ static gboolean send_delayed_notification(gpointer user_data) {
         const gchar *current_profile = plugin->current_profile ? plugin->current_profile : "balanced";
         const gchar *pending = plugin->pending_notification_profile;
         
+        /* Сравниваем ПОЛНЫЕ имена профилей */
         if (g_strcmp0(current_profile, pending) == 0) {
-            gchar *display_name = g_strdup(pending);
-            if (display_name[0] >= 'a' && display_name[0] <= 'z') {
-                display_name[0] = g_ascii_toupper(display_name[0]);
+            /* Ищем пользовательское имя для профиля */
+            const gchar *display_name = pending;
+            if (plugin->profile_lookup) {
+                GHashTableIter iter;
+                gpointer key, value;
+                g_hash_table_iter_init(&iter, plugin->profile_lookup);
+                while (g_hash_table_iter_next(&iter, &key, &value)) {
+                    ProfileSettings *settings = (ProfileSettings*)value;
+                    if (settings->default_name && g_strcmp0(pending, settings->default_name) == 0) {
+                        if (settings->name && strlen(settings->name) > 0) {
+                            display_name = settings->name;
+                        }
+                        break;
+                    }
+                }
             }
+            
             const gchar *icon = get_profile_icon(plugin, pending);
             gchar *subtitle = g_strdup_printf(_("Current profile: %s"), display_name);
             send_notification(_("Performance profile changed"), subtitle, FALSE, icon);
             g_free(subtitle);
-            g_free(display_name);
             
             g_free(plugin->last_notified_profile);
             plugin->last_notified_profile = g_strdup(pending);
+            DEBUG_TRACE("  >>> NOTIFICATION SENT for profile: %s (display: %s)", pending, display_name);
         } else {
             DEBUG_TRACE("  >>> NOTIFICATION CANCELLED: profile changed from '%s' to '%s' during delay", 
                         pending, current_profile);
@@ -141,7 +154,6 @@ static gboolean send_delayed_notification(gpointer user_data) {
 void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile) {
     if (!plugin || !profile) return;
     
-    /* Если уведомления скрыты — не отправляем */
     if (plugin->hide_notifications) {
         DEBUG_TRACE("  >>> NOTIFICATION SKIPPED: notifications are hidden");
         return;
@@ -149,24 +161,36 @@ void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile) {
     
     /* Если anti-flapping выключен — отправляем уведомление сразу */
     if (!plugin->enable_antiflapping) {
-        gchar *display_name = g_strdup(profile);
-        if (display_name[0] >= 'a' && display_name[0] <= 'z') {
-            display_name[0] = g_ascii_toupper(display_name[0]);
+        /* Ищем пользовательское имя для профиля */
+        const gchar *display_name = profile;
+        if (plugin->profile_lookup) {
+            GHashTableIter iter;
+            gpointer key, value;
+            g_hash_table_iter_init(&iter, plugin->profile_lookup);
+            while (g_hash_table_iter_next(&iter, &key, &value)) {
+                ProfileSettings *settings = (ProfileSettings*)value;
+                if (settings->default_name && g_strcmp0(profile, settings->default_name) == 0) {
+                    if (settings->name && strlen(settings->name) > 0) {
+                        display_name = settings->name;
+                    }
+                    break;
+                }
+            }
         }
+        
         const gchar *icon = get_profile_icon(plugin, profile);
         gchar *subtitle = g_strdup_printf(_("Current profile: %s"), display_name);
         send_notification(_("Performance profile changed"), subtitle, FALSE, icon);
         g_free(subtitle);
-        g_free(display_name);
         return;
     }
     
     /* ===== Anti-flapping включен ===== */
     
-    /* Проверяем, не было ли уже уведомления об этом профиле */
-    if (plugin->last_notified_profile && 
-        g_strcmp0(plugin->last_notified_profile, profile) == 0) {
-        DEBUG_TRACE("  >>> NOTIFICATION SKIPPED: already notified for profile: %s", profile);
+    /* Если уже есть запланированное уведомление для ТОГО ЖЕ профиля — не отменяем */
+    if (plugin->pending_notification_profile && 
+        g_strcmp0(plugin->pending_notification_profile, profile) == 0) {
+        DEBUG_TRACE("  >>> NOTIFICATION ALREADY SCHEDULED for profile: %s, skipping", profile);
         return;
     }
     
@@ -174,18 +198,27 @@ void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile) {
     if (plugin->notification_timeout_id > 0) {
         g_source_remove(plugin->notification_timeout_id);
         plugin->notification_timeout_id = 0;
+        DEBUG_TRACE("  >>> Previous notification cancelled (new profile: %s)", profile);
     }
     
     /* Сохраняем новый профиль для уведомления */
     g_free(plugin->pending_notification_profile);
     plugin->pending_notification_profile = g_strdup(profile);
     
-    /* Определяем таймаут */
-    guint timeout_ms = plugin->custom_timeout_ms;
-    if (timeout_ms == 0) timeout_ms = 1500;
+    /* Определяем таймаут: если Custom time включен — используем custom_timeout_ms, иначе DEFAULT_TIMEOUT_MS */
+    guint timeout_ms;
+    if (plugin->custom_time_enabled) {
+        timeout_ms = plugin->custom_timeout_ms;
+        if (timeout_ms == 0) {
+            timeout_ms = DEFAULT_TIMEOUT_MS;
+        }
+    } else {
+        timeout_ms = DEFAULT_TIMEOUT_MS;
+    }
     
     plugin->notification_timeout_id = g_timeout_add(timeout_ms, send_delayed_notification, plugin);
-    DEBUG_TRACE("  >>> SCHEDULED notification in %u ms for profile: %s", timeout_ms, profile);
+    DEBUG_TRACE("  >>> SCHEDULED notification in %u ms for profile: %s (custom_time_enabled=%d)", 
+                timeout_ms, profile, plugin->custom_time_enabled);
 }
 
 void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) {
