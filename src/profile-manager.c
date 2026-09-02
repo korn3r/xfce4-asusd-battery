@@ -28,11 +28,9 @@ void profile_settings_free(ProfileSettings *settings) {
 const gchar* profile_name_from_enum(AsusdBatteryPlugin *plugin, guint32 enum_val) {
     if (!plugin) return "balanced";
     
+    /* Возвращаем default_name (ID), а не пользовательское имя */
     if (plugin->profile_lookup) {
         ProfileSettings *settings = g_hash_table_lookup(plugin->profile_lookup, GINT_TO_POINTER(enum_val));
-        if (settings && settings->name && strlen(settings->name) > 0) {
-            return settings->name;
-        }
         if (settings && settings->default_name) {
             return settings->default_name;
         }
@@ -44,23 +42,27 @@ const gchar* profile_name_from_enum(AsusdBatteryPlugin *plugin, guint32 enum_val
 gboolean profile_enum_from_name(AsusdBatteryPlugin *plugin, const gchar *name, guint32 *enum_val) {
     if (!plugin || !name || !enum_val) return FALSE;
     
+    /* Сначала ищем по default_name (ID) */
     if (plugin->profile_lookup) {
         GHashTableIter iter;
         gpointer key, value;
         g_hash_table_iter_init(&iter, plugin->profile_lookup);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
             ProfileSettings *settings = (ProfileSettings*)value;
-            if (settings->name && g_strcmp0(name, settings->name) == 0) {
+            /* Сравниваем с default_name (ID) */
+            if (settings->default_name && g_strcmp0(name, settings->default_name) == 0) {
                 *enum_val = settings->enum_value;
                 return TRUE;
             }
-            if (settings->default_name && g_strcmp0(name, settings->default_name) == 0) {
+            /* Также проверяем пользовательское имя (для обратной совместимости) */
+            if (settings->name && g_strcmp0(name, settings->name) == 0) {
                 *enum_val = settings->enum_value;
                 return TRUE;
             }
         }
     }
     
+    /* Фолбэк для стандартных имен */
     for (guint32 i = 0; i < 10; i++) {
         const char *default_name = enum_to_default_name(i);
         if (default_name && g_strcmp0(name, default_name) == 0) {
@@ -128,8 +130,9 @@ gchar** asusd_get_available_profiles(AsusdBatteryPlugin *plugin) {
         for (guint i = 0; i < plugin->profiles->len; i++) {
             ProfileSettings *s = g_ptr_array_index(plugin->profiles, i);
             if (s->enum_value == enum_val) {
-                const char *name = s->name && strlen(s->name) > 0 ? s->name : s->default_name;
-                if (name) g_ptr_array_add(sorted, g_strdup(name));
+                /* ВАЖНО: Возвращаем default_name, а не отображаемое имя */
+                const char *name = s->default_name ? s->default_name : "balanced";
+                g_ptr_array_add(sorted, g_strdup(name));
                 break;
             }
         }
@@ -227,7 +230,7 @@ void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
             ProfileSettings *settings = g_new0(ProfileSettings, 1);
             settings->enum_value = enum_value;
             settings->default_name = g_strdup(default_name);
-            settings->name = NULL;
+            settings->name = NULL;  /* Имя будет загружено из настроек позже */
             settings->icon = g_strdup(icon);
             
             g_ptr_array_add(plugin->profiles, settings);
@@ -236,9 +239,14 @@ void parse_profile_choices(AsusdBatteryPlugin *plugin, GVariant *value) {
             }
             DEBUG_TRACE("ASUSD: Loaded new profile: %s (enum: %u) icon: %s", default_name, enum_value, icon);
         } else {
-            DEBUG_TRACE("ASUSD: Profile %s (enum: %u) already exists, keeping existing data (name='%s')", 
-                        default_name, enum_value,
-                        existing->name ? existing->name : "NULL");
+            /* ВАЖНО: Обновляем default_name, но НЕ трогаем пользовательское имя */
+            if (existing && existing->default_name) {
+                g_free(existing->default_name);
+                existing->default_name = g_strdup(default_name);
+            }
+            DEBUG_TRACE("ASUSD: Profile enum %u already exists, keeping existing data (name='%s')", 
+                        enum_value,
+                        existing && existing->name ? existing->name : "NULL");
         }
     }
 }

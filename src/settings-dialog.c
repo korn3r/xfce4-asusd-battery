@@ -42,6 +42,7 @@ void settings_dialog_reset_dirty(AsusdBatteryPlugin *plugin) {
     plugin->dialog_state->dirty_antiflapping = FALSE;
     plugin->dialog_state->dirty_custom_time = FALSE;
     plugin->dialog_state->dirty_timeout = FALSE;
+    DEBUG_TRACE("settings_dialog_reset_dirty: all dirty flags reset");
 }
 
 void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
@@ -142,44 +143,57 @@ void settings_dialog_update_ui(AsusdBatteryPlugin *plugin) {
         gtk_widget_set_visible(GTK_WIDGET(state->custom_time_error_label), FALSE);
     }
     
+    /* Обновляем комбобоксы по enum, а не по имени */
     if (state->combo_ac && !state->dirty_ac_profile && plugin->auto_switch_ac_profile) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
-        if (model) {
-            GtkTreeIter iter;
-            gboolean found = FALSE;
-            gchar *profile_name = NULL;
-            gint index = 0;
-            if (gtk_tree_model_get_iter_first(model, &iter)) {
-                do {
-                    gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
-                    if (g_strcmp0(profile_name, plugin->auto_switch_ac_profile) == 0) { found = TRUE; break; }
-                    g_free(profile_name);
-                    index++;
-                } while (gtk_tree_model_iter_next(model, &iter));
-                g_free(profile_name);
+        guint32 enum_val;
+        if (profile_enum_from_name(plugin, plugin->auto_switch_ac_profile, &enum_val)) {
+            int index = -1;
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
+            if (model) {
+                GtkTreeIter iter;
+                gint current_idx = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        ProfileSettings *settings = g_ptr_array_index(plugin->profiles, current_idx);
+                        if (settings && settings->enum_value == enum_val) {
+                            index = current_idx;
+                            break;
+                        }
+                        current_idx++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                }
             }
-            if (found) gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_ac), index);
+            if (index >= 0) {
+                gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_ac), index);
+            }
         }
     }
+    
     if (state->combo_battery && !state->dirty_battery_profile && plugin->auto_switch_battery_profile) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
-        if (model) {
-            GtkTreeIter iter;
-            gboolean found = FALSE;
-            gchar *profile_name = NULL;
-            gint index = 0;
-            if (gtk_tree_model_get_iter_first(model, &iter)) {
-                do {
-                    gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
-                    if (g_strcmp0(profile_name, plugin->auto_switch_battery_profile) == 0) { found = TRUE; break; }
-                    g_free(profile_name);
-                    index++;
-                } while (gtk_tree_model_iter_next(model, &iter));
-                g_free(profile_name);
+        guint32 enum_val;
+        if (profile_enum_from_name(plugin, plugin->auto_switch_battery_profile, &enum_val)) {
+            int index = -1;
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
+            if (model) {
+                GtkTreeIter iter;
+                gint current_idx = 0;
+                if (gtk_tree_model_get_iter_first(model, &iter)) {
+                    do {
+                        ProfileSettings *settings = g_ptr_array_index(plugin->profiles, current_idx);
+                        if (settings && settings->enum_value == enum_val) {
+                            index = current_idx;
+                            break;
+                        }
+                        current_idx++;
+                    } while (gtk_tree_model_iter_next(model, &iter));
+                }
             }
-            if (found) gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_battery), index);
+            if (index >= 0) {
+                gtk_combo_box_set_active(GTK_COMBO_BOX(state->combo_battery), index);
+            }
         }
     }
+    
     state->syncing_ui = FALSE;
 }
 
@@ -190,12 +204,20 @@ void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_d
     if (plugin->no_battery) {
         DEBUG_TRACE("settings_dialog_sync_from_asusd: no_battery enabled, skipping ASUSD battery settings");
         settings_dialog_update_ui(plugin);
+        /* Сбрасываем dirty флаги после обновления UI */
+        if (!keep_dirty) {
+            settings_dialog_reset_dirty(plugin);
+        }
         return;
     }
     
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
         DEBUG_TRACE("settings_dialog_sync_from_asusd: ASUSD not available, using cached values");
         settings_dialog_update_ui(plugin);
+        /* Сбрасываем dirty флаги после обновления UI */
+        if (!keep_dirty) {
+            settings_dialog_reset_dirty(plugin);
+        }
         return;
     }
     
@@ -213,6 +235,8 @@ void settings_dialog_sync_from_asusd(AsusdBatteryPlugin *plugin, gboolean keep_d
     ctx->dialog_id = dialog_id;
     ctx->is_dialog_callback = TRUE;
     ctx->user_data = GINT_TO_POINTER(0);
+    /* Передаем keep_dirty через user_data */
+    ctx->user_data = GINT_TO_POINTER(keep_dirty ? 1000 : 0);
     
     asusd_get_property_async(plugin, "ChangePlatformProfileOnAc",
                             (GAsyncReadyCallback)on_dialog_property_loaded, ctx);
@@ -231,7 +255,9 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
     }
     
     guint dialog_id = ctx->dialog_id;
-    int step = GPOINTER_TO_INT(ctx->user_data);
+    int keep_dirty_flag = GPOINTER_TO_INT(ctx->user_data);
+    int step = keep_dirty_flag >= 1000 ? keep_dirty_flag - 1000 : keep_dirty_flag;
+    gboolean keep_dirty = (keep_dirty_flag >= 1000);
     
     if (!plugin->dialog_state) {
         DEBUG_TRACE("on_dialog_property_loaded: dialog_state is NULL, discarding");
@@ -291,15 +317,19 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = TRUE;
             
-            ctx->user_data = GINT_TO_POINTER(1);
+            /* ВАЖНО: Не освобождаем ctx здесь, а переиспользуем для следующего шага */
+            ctx->user_data = GINT_TO_POINTER(keep_dirty ? 1001 : 1);
             if (!asusd_get_property_async(plugin, "ChangePlatformProfileOnBattery",
                                           (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
                 DEBUG_TRACE("Failed to start async operation for ChangePlatformProfileOnBattery");
+                /* Только здесь освобождаем ctx, если не смогли запустить следующий запрос */
                 async_call_context_free(ctx);
                 g_object_unref(plugin);
                 return;
             }
-            break;
+            /* ctx продолжает жить, передан в следующий асинхронный вызов */
+            g_object_unref(plugin);
+            return;
         }
         case 1: {
             if (error) {
@@ -333,7 +363,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = TRUE;
             
-            ctx->user_data = GINT_TO_POINTER(2);
+            ctx->user_data = GINT_TO_POINTER(keep_dirty ? 1002 : 2);
             if (!asusd_get_property_async(plugin, "PlatformProfileOnAc",
                                           (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
                 DEBUG_TRACE("Failed to start async operation for PlatformProfileOnAc");
@@ -341,7 +371,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 g_object_unref(plugin);
                 return;
             }
-            break;
+            g_object_unref(plugin);
+            return;
         }
         case 2: {
             const char *default_profile = "balanced";
@@ -372,22 +403,25 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         plugin->auto_switch_ac_profile = g_strdup(name);
                         DEBUG_TRACE("PlatformProfileOnAc = %s", name);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->combo_ac && !plugin->dialog_state->dirty_ac_profile) {
+                            /* Находим индекс по enum, а не по имени */
+                            int index = -1;
                             GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_ac));
                             if (model) {
                                 GtkTreeIter iter;
-                                gboolean found = FALSE;
-                                gchar *profile_name = NULL;
-                                gint index = 0;
+                                gint current_idx = 0;
                                 if (gtk_tree_model_get_iter_first(model, &iter)) {
                                     do {
-                                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
-                                        if (g_strcmp0(profile_name, name) == 0) { found = TRUE; break; }
-                                        g_free(profile_name);
-                                        index++;
+                                        ProfileSettings *settings = g_ptr_array_index(plugin->profiles, current_idx);
+                                        if (settings && settings->enum_value == enum_val) {
+                                            index = current_idx;
+                                            break;
+                                        }
+                                        current_idx++;
                                     } while (gtk_tree_model_iter_next(model, &iter));
-                                    g_free(profile_name);
                                 }
-                                if (found) gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_ac), index);
+                            }
+                            if (index >= 0) {
+                                gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_ac), index);
                             }
                         }
                     }
@@ -399,7 +433,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = TRUE;
             
-            ctx->user_data = GINT_TO_POINTER(3);
+            ctx->user_data = GINT_TO_POINTER(keep_dirty ? 1003 : 3);
             if (!asusd_get_property_async(plugin, "PlatformProfileOnBattery",
                                           (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
                 DEBUG_TRACE("Failed to start async operation for PlatformProfileOnBattery");
@@ -407,7 +441,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 g_object_unref(plugin);
                 return;
             }
-            break;
+            g_object_unref(plugin);
+            return;
         }
         case 3: {
             const char *default_profile = "balanced";
@@ -438,22 +473,25 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                         plugin->auto_switch_battery_profile = g_strdup(name);
                         DEBUG_TRACE("PlatformProfileOnBattery = %s", name);
                         if (is_dialog_valid(plugin, dialog_id) && plugin->dialog_state->combo_battery && !plugin->dialog_state->dirty_battery_profile) {
+                            /* Находим индекс по enum, а не по имени */
+                            int index = -1;
                             GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(plugin->dialog_state->combo_battery));
                             if (model) {
                                 GtkTreeIter iter;
-                                gboolean found = FALSE;
-                                gchar *profile_name = NULL;
-                                gint index = 0;
+                                gint current_idx = 0;
                                 if (gtk_tree_model_get_iter_first(model, &iter)) {
                                     do {
-                                        gtk_tree_model_get(model, &iter, 0, &profile_name, -1);
-                                        if (g_strcmp0(profile_name, name) == 0) { found = TRUE; break; }
-                                        g_free(profile_name);
-                                        index++;
+                                        ProfileSettings *settings = g_ptr_array_index(plugin->profiles, current_idx);
+                                        if (settings && settings->enum_value == enum_val) {
+                                            index = current_idx;
+                                            break;
+                                        }
+                                        current_idx++;
                                     } while (gtk_tree_model_iter_next(model, &iter));
-                                    g_free(profile_name);
                                 }
-                                if (found) gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_battery), index);
+                            }
+                            if (index >= 0) {
+                                gtk_combo_box_set_active(GTK_COMBO_BOX(plugin->dialog_state->combo_battery), index);
                             }
                         }
                     }
@@ -465,7 +503,7 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = TRUE;
             
-            ctx->user_data = GINT_TO_POINTER(4);
+            ctx->user_data = GINT_TO_POINTER(keep_dirty ? 1004 : 4);
             if (!asusd_get_property_async(plugin, "ChargeControlEndThreshold",
                                           (GAsyncReadyCallback)on_dialog_property_loaded, ctx)) {
                 DEBUG_TRACE("Failed to start async operation for ChargeControlEndThreshold");
@@ -473,7 +511,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
                 g_object_unref(plugin);
                 return;
             }
-            break;
+            g_object_unref(plugin);
+            return;
         }
         case 4: {
             if (error) {
@@ -509,7 +548,15 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             if (is_dialog_valid(plugin, dialog_id))
                 plugin->dialog_state->syncing_ui = FALSE;
             
-            DEBUG_TRACE("Dialog settings loaded completely");
+            /* ВАЖНО: Сбрасываем dirty флаги после загрузки данных */
+            if (!keep_dirty) {
+                settings_dialog_reset_dirty(plugin);
+                DEBUG_TRACE("Dialog settings loaded completely, dirty flags reset");
+            } else {
+                DEBUG_TRACE("Dialog settings loaded completely, keeping dirty flags");
+            }
+            
+            /* Только здесь, на последнем шаге, освобождаем ctx */
             async_call_context_free(ctx);
             g_object_unref(plugin);
             return;
@@ -518,6 +565,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
             break;
     }
     
+    /* Если мы здесь, что-то пошло не так */
+    async_call_context_free(ctx);
     g_object_unref(plugin);
 }
 
@@ -667,7 +716,15 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
             const char *name = settings->name && strlen(settings->name) > 0 ? settings->name : settings->default_name;
             gtk_list_store_append(store_ac, &iter);
             gtk_list_store_set(store_ac, &iter, 0, name, -1);
-            if (plugin->auto_switch_ac_profile && g_strcmp0(name, plugin->auto_switch_ac_profile) == 0) active_index = i;
+            /* Выбираем по enum, а не по имени */
+            if (plugin->auto_switch_ac_profile) {
+                guint32 enum_val;
+                if (profile_enum_from_name(plugin, plugin->auto_switch_ac_profile, &enum_val)) {
+                    if (settings->enum_value == enum_val) {
+                        active_index = i;
+                    }
+                }
+            }
         }
         gtk_combo_box_set_active(GTK_COMBO_BOX(combo_ac), active_index);
     }
@@ -705,7 +762,15 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
             const char *name = settings->name && strlen(settings->name) > 0 ? settings->name : settings->default_name;
             gtk_list_store_append(store_battery, &iter);
             gtk_list_store_set(store_battery, &iter, 0, name, -1);
-            if (plugin->auto_switch_battery_profile && g_strcmp0(name, plugin->auto_switch_battery_profile) == 0) active_index = i;
+            /* Выбираем по enum, а не по имени */
+            if (plugin->auto_switch_battery_profile) {
+                guint32 enum_val;
+                if (profile_enum_from_name(plugin, plugin->auto_switch_battery_profile, &enum_val)) {
+                    if (settings->enum_value == enum_val) {
+                        active_index = i;
+                    }
+                }
+            }
         }
         gtk_combo_box_set_active(GTK_COMBO_BOX(combo_battery), active_index);
     }
@@ -1155,6 +1220,21 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     SettingsDialogState *state = plugin->dialog_state;
     if (!state) return;
     
+    /* ===== 0. Проверяем, есть ли вообще изменения ===== */
+    gboolean has_changes = FALSE;
+    if (state->dirty_ac_enabled || state->dirty_battery_enabled || 
+        state->dirty_ac_profile || state->dirty_battery_profile || 
+        state->dirty_limit || state->dirty_name || state->dirty_icon ||
+        state->dirty_antiflapping || state->dirty_custom_time || state->dirty_timeout) {
+        has_changes = TRUE;
+        DEBUG_TRACE("  Changes detected in dialog");
+    } else {
+        DEBUG_TRACE("  No changes detected in dialog, showing notification");
+        if (!plugin->hide_notifications)
+            send_notification(_("No changes"), _("Settings are already up to date"), FALSE, "emblem-default");
+        return;
+    }
+    
     /* ===== 1. Сначала применяем изменения UI (имя/иконка) ===== */
     gboolean name_or_icon_changed = FALSE;
     
@@ -1264,57 +1344,48 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         antiflapping_changed = TRUE;
     }
     
-    /* ===== 4. Сохраняем все UI изменения ===== */
+    /* ===== 4. Сохраняем UI изменения в xfconf ===== */
     if (name_or_icon_changed || hide_changed || antiflapping_changed) {
         save_settings(plugin);
         DEBUG_TRACE("  UI changes saved (name/icon/hide options/anti-flapping)");
     }
     
-    /* ===== 4.5 Если no_battery включен — пропускаем D-Bus изменения ===== */
-    if (plugin->no_battery) {
-        DEBUG_TRACE("  no_battery enabled, skipping D-Bus settings");
-        settings_dialog_reset_dirty(plugin);
-        plugin->saving_settings = FALSE;
-        if (!plugin->hide_notifications && (name_or_icon_changed || hide_changed || antiflapping_changed)) {
-            send_notification(_("Settings applied"), _("UI settings updated"), FALSE, "emblem-system");
-        }
-        return;
-    }
-    
     /* ===== 5. Проверяем D-Bus изменения ===== */
-    if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
-        DEBUG_TRACE("  ASUSD not available, cannot apply D-Bus settings");
-        if (!plugin->hide_notifications)
-            send_notification(_("Error"), _("ASUSD is not available. Cannot apply settings."), TRUE, "emblem-readonly");
-        settings_dialog_reset_dirty(plugin);
-        plugin->saving_settings = FALSE;
-        return;
-    }
-    
-    gboolean new_ac_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_ac));
-    gboolean new_battery_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_battery));
-    gboolean new_limit_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->limit_check));
-    
+    gboolean dbus_changed = FALSE;
+    gboolean new_ac_enabled = FALSE;
+    gboolean new_battery_enabled = FALSE;
+    gboolean new_limit_enabled = FALSE;
     gchar *new_ac_profile = NULL;
     gchar *new_battery_profile = NULL;
-    GtkTreeIter iter;
-    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_ac), &iter)) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
-        gtk_tree_model_get(model, &iter, 0, &new_ac_profile, -1);
-    }
-    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_battery), &iter)) {
-        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
-        gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
+    
+    /* Собираем D-Bus настройки только если есть соответствующие dirty флаги */
+    if (state->dirty_ac_enabled || state->dirty_battery_enabled || 
+        state->dirty_ac_profile || state->dirty_battery_profile || 
+        state->dirty_limit) {
+        
+        new_ac_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_ac));
+        new_battery_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->check_battery));
+        new_limit_enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(state->limit_check));
+        
+        GtkTreeIter iter;
+        if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_ac), &iter)) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_ac));
+            gtk_tree_model_get(model, &iter, 0, &new_ac_profile, -1);
+        }
+        if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(state->combo_battery), &iter)) {
+            GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(state->combo_battery));
+            gtk_tree_model_get(model, &iter, 0, &new_battery_profile, -1);
+        }
+        
+        /* Проверяем только те D-Bus настройки, которые были изменены */
+        if (state->dirty_ac_enabled && new_ac_enabled != plugin->auto_switch_ac_enabled) dbus_changed = TRUE;
+        if (state->dirty_battery_enabled && new_battery_enabled != plugin->auto_switch_battery_enabled) dbus_changed = TRUE;
+        if (state->dirty_ac_profile && new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) dbus_changed = TRUE;
+        if (state->dirty_battery_profile && new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) dbus_changed = TRUE;
+        if (state->dirty_limit && new_limit_enabled != plugin->battery_limit_enabled) dbus_changed = TRUE;
     }
     
     /* ===== 6. Если нет D-Bus изменений, завершаем ===== */
-    gboolean dbus_changed = FALSE;
-    if (new_ac_enabled != plugin->auto_switch_ac_enabled) dbus_changed = TRUE;
-    if (new_battery_enabled != plugin->auto_switch_battery_enabled) dbus_changed = TRUE;
-    if (new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) dbus_changed = TRUE;
-    if (new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) dbus_changed = TRUE;
-    if (new_limit_enabled != plugin->battery_limit_enabled) dbus_changed = TRUE;
-    
     if (!dbus_changed) {
         DEBUG_TRACE("  No D-Bus changes detected");
         if (!name_or_icon_changed && !hide_changed && !antiflapping_changed) {
@@ -1331,7 +1402,31 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
         return;
     }
     
-    /* ===== 7. Применяем D-Bus изменения через очередь ===== */
+    /* ===== 7. Если no_battery включен — не применяем D-Bus изменения ===== */
+    if (plugin->no_battery) {
+        DEBUG_TRACE("  no_battery enabled, skipping D-Bus settings");
+        settings_dialog_reset_dirty(plugin);
+        plugin->saving_settings = FALSE;
+        if (!plugin->hide_notifications)
+            send_notification(_("Settings applied"), _("UI settings updated"), FALSE, "emblem-system");
+        g_free(new_ac_profile);
+        g_free(new_battery_profile);
+        return;
+    }
+    
+    /* ===== 8. Проверяем доступность ASUSD ===== */
+    if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) {
+        DEBUG_TRACE("  ASUSD not available, cannot apply D-Bus settings");
+        if (!plugin->hide_notifications)
+            send_notification(_("Error"), _("ASUSD is not available. Cannot apply settings."), TRUE, "emblem-readonly");
+        settings_dialog_reset_dirty(plugin);
+        plugin->saving_settings = FALSE;
+        g_free(new_ac_profile);
+        g_free(new_battery_profile);
+        return;
+    }
+    
+    /* ===== 9. Применяем D-Bus изменения через очередь ===== */
     plugin->saving_settings = TRUE;
     
     SettingsApplyContext *ctx = g_new0(SettingsApplyContext, 1);
@@ -1348,14 +1443,23 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     ctx->error_messages = NULL;
     ctx->error_count = 0;
     
-    if (new_ac_enabled != plugin->auto_switch_ac_enabled) ctx->total_steps++;
-    if (new_battery_enabled != plugin->auto_switch_battery_enabled) ctx->total_steps++;
-    if (new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) ctx->total_steps++;
-    if (new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) ctx->total_steps++;
-    if (ctx->new_limit != plugin->current_battery_limit) ctx->total_steps++;
+    /* Считаем только те шаги, которые реально изменились */
+    if (state->dirty_ac_enabled && new_ac_enabled != plugin->auto_switch_ac_enabled) ctx->total_steps++;
+    if (state->dirty_battery_enabled && new_battery_enabled != plugin->auto_switch_battery_enabled) ctx->total_steps++;
+    if (state->dirty_ac_profile && new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) ctx->total_steps++;
+    if (state->dirty_battery_profile && new_battery_profile && g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) != 0) ctx->total_steps++;
+    if (state->dirty_limit && ctx->new_limit != plugin->current_battery_limit) ctx->total_steps++;
     
     g_free(new_ac_profile);
     g_free(new_battery_profile);
+    
+    if (ctx->total_steps == 0) {
+        DEBUG_TRACE("  No D-Bus steps after filtering");
+        g_free(ctx);
+        settings_dialog_reset_dirty(plugin);
+        plugin->saving_settings = FALSE;
+        return;
+    }
     
     DEBUG_TRACE("  Starting apply with %d D-Bus steps", ctx->total_steps);
     apply_next_setting(ctx);
@@ -1404,6 +1508,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     
     if (step == applied && ctx->new_ac_profile &&
         g_strcmp0(ctx->new_ac_profile, plugin->auto_switch_ac_profile) != 0) {
+        /* Ищем enum по имени профиля */
         guint32 enum_val = 999;
         if (!profile_enum_from_name(plugin, ctx->new_ac_profile, &enum_val) || enum_val == 999) {
             DEBUG_WARN("  Failed to find enum for profile: %s", ctx->new_ac_profile);
@@ -1422,6 +1527,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     
     if (step == applied && ctx->new_battery_profile &&
         g_strcmp0(ctx->new_battery_profile, plugin->auto_switch_battery_profile) != 0) {
+        /* Ищем enum по имени профиля */
         guint32 enum_val = 999;
         if (!profile_enum_from_name(plugin, ctx->new_battery_profile, &enum_val) || enum_val == 999) {
             DEBUG_WARN("  Failed to find enum for profile: %s", ctx->new_battery_profile);

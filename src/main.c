@@ -228,21 +228,18 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     const gchar *profile = plugin->current_profile ? plugin->current_profile : "balanced";
     const gchar *display_profile = profile;
     
-    /* Ищем кастомное имя для профиля */
+    /* Ищем кастомное имя для профиля по default_name (ID) */
     if (plugin->profile_lookup && profile && g_strcmp0(profile, "unknown") != 0) {
         GHashTableIter iter;
         gpointer key, value;
         g_hash_table_iter_init(&iter, plugin->profile_lookup);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
             ProfileSettings *settings = (ProfileSettings*)value;
+            /* Сравниваем с default_name (ID) */
             if (settings->default_name && g_strcmp0(profile, settings->default_name) == 0) {
                 if (settings->name && strlen(settings->name) > 0) {
                     display_profile = settings->name;
                 }
-                break;
-            }
-            if (settings->name && g_strcmp0(profile, settings->name) == 0) {
-                display_profile = settings->name;
                 break;
             }
         }
@@ -258,7 +255,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     DEBUG_TRACE("  should_notify = %d", should_notify);
     DEBUG_TRACE("  hide_notifications = %d", plugin->hide_notifications);
     DEBUG_TRACE("  profile = '%s'", profile);
-    DEBUG_TRACE("  display_profile = '%s'", display_profile);
+    DEBUG_TRACE("  display_profile = '%s'", display_profile ? display_profile : "NULL");
     DEBUG_TRACE("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
     
     gboolean profile_changed = FALSE;
@@ -283,10 +280,6 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
             g_hash_table_iter_init(&iter, plugin->profile_lookup);
             while (g_hash_table_iter_next(&iter, &key, &value)) {
                 ProfileSettings *settings = (ProfileSettings*)value;
-                if (settings->name && g_strcmp0(profile, settings->name) == 0) {
-                    if (settings->icon && strlen(settings->icon) > 0) icon_name = settings->icon;
-                    break;
-                }
                 if (settings->default_name && g_strcmp0(profile, settings->default_name) == 0) {
                     if (settings->icon && strlen(settings->icon) > 0) icon_name = settings->icon;
                     break;
@@ -299,6 +292,7 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         
         if (!plugin->hide_text) {
             gchar *display_text = g_strdup(display_profile);
+            /* Делаем первую букву заглавной только для стандартных имен */
             if (g_strcmp0(display_profile, "balanced") == 0 || 
                 g_strcmp0(display_profile, "performance") == 0 || 
                 g_strcmp0(display_profile, "quiet") == 0 ||
@@ -448,23 +442,51 @@ void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     GtkWidget *menu = gtk_menu_new();
     if (!menu) return;
     
-    gchar **profiles = asusd_get_available_profiles(plugin);
-    const gchar *current = plugin->current_profile ? plugin->current_profile : "balanced";
+    /* Получаем список профилей с их enum-значениями */
+    GPtrArray *profiles = plugin->profiles;
+    if (!profiles || profiles->len == 0) {
+        create_fallback_profiles(plugin);
+        profiles = plugin->profiles;
+        if (!profiles || profiles->len == 0) return;
+    }
     
-    if (profiles) {
-        for (int i = 0; profiles[i] != NULL; i++) {
-            GtkWidget *item = gtk_check_menu_item_new_with_label(profiles[i]);
-            
-            if (g_strcmp0(profiles[i], current) == 0) {
-                gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item), TRUE);
-                gtk_widget_set_sensitive(item, FALSE);
-            }
-            
-            g_signal_connect(G_OBJECT(item), "activate", G_CALLBACK(on_profile_selected), plugin);
-            g_object_set_data_full(G_OBJECT(item), "profile", g_strdup(profiles[i]), g_free);
-            gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    /* Получаем текущий активный профиль (enum) */
+    guint32 current_enum = 999;
+    if (plugin->current_profile) {
+        if (!profile_enum_from_name(plugin, plugin->current_profile, &current_enum)) {
+            /* Если не нашли, пробуем по умолчанию */
+            current_enum = 0; /* balanced */
         }
-        g_strfreev(profiles);
+    }
+    
+    /* Сортируем профили для отображения */
+    for (guint32 enum_val = 0; enum_val <= 10; enum_val++) {
+        ProfileSettings *found = NULL;
+        for (guint i = 0; i < profiles->len; i++) {
+            ProfileSettings *s = g_ptr_array_index(profiles, i);
+            if (s->enum_value == enum_val) {
+                found = s;
+                break;
+            }
+        }
+        if (!found) continue;
+        
+        /* Используем отображаемое имя для пункта меню */
+        const char *display_name = found->name && strlen(found->name) > 0 ? 
+                                   found->name : found->default_name;
+        
+        GtkWidget *item = gtk_check_menu_item_new_with_label(display_name);
+        
+        /* АКТИВИРУЕМ по enum, а не по имени! */
+        if (found->enum_value == current_enum) {
+            gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item), TRUE);
+            gtk_widget_set_sensitive(item, FALSE);
+        }
+        
+        /* Сохраняем enum-значение как ID профиля */
+        g_signal_connect(G_OBJECT(item), "activate", G_CALLBACK(on_profile_selected), plugin);
+        g_object_set_data(G_OBJECT(item), "profile_enum", GINT_TO_POINTER(found->enum_value));
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     }
     
     gtk_widget_show_all(menu);
@@ -474,8 +496,14 @@ void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     if (plugin->asusd_state != ASUSD_STATE_AVAILABLE) return;
-    gchar *profile = (gchar *)g_object_get_data(G_OBJECT(item), "profile");
-    if (!profile) return;
+    
+    /* Получаем enum-значение, а не имя */
+    guint32 enum_val = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(item), "profile_enum"));
+    if (enum_val == 999) return; /* Невалидное значение */
+    
+    /* Получаем имя профиля по enum */
+    const char *profile_name = profile_name_from_enum(plugin, enum_val);
+    if (!profile_name) return;
     
     /* Сбрасываем last_notified_profile при ручном переключении */
     g_free(plugin->last_notified_profile);
@@ -489,7 +517,7 @@ void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin) {
     g_free(plugin->pending_notification_profile);
     plugin->pending_notification_profile = NULL;
     
-    asusd_set_profile_async(plugin, profile, (GAsyncReadyCallback)on_set_profile_done, plugin);
+    asusd_set_profile_async(plugin, profile_name, (GAsyncReadyCallback)on_set_profile_done, plugin);
 }
 
 void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data) {
