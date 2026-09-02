@@ -572,6 +572,8 @@ void on_dialog_property_loaded(GObject *source, GAsyncResult *res, gpointer user
 
 /* ========== Создание диалога ========== */
 
+/* ========== Создание диалога ========== */
+
 void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
     
@@ -877,18 +879,24 @@ void create_settings_dialog(AsusdBatteryPlugin *plugin) {
     gtk_box_pack_start(GTK_BOX(options_hbox), hide_icon_check_widget, FALSE, FALSE, 0);
     state->hide_icon_check = hide_icon_check_widget;
     g_object_set_data(G_OBJECT(dialog), "hide_icon_check", hide_icon_check_widget);
+    /* Подключаем оба сигнала: и on_hide_toggle, и on_any_setting_changed */
     g_signal_connect(G_OBJECT(hide_icon_check_widget), "toggled", G_CALLBACK(on_hide_toggle), plugin);
+    g_signal_connect(G_OBJECT(hide_icon_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
+    
     hide_text_check_widget = gtk_check_button_new_with_label(_("Text"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hide_text_check_widget), plugin->hide_text);
     gtk_box_pack_start(GTK_BOX(options_hbox), hide_text_check_widget, FALSE, FALSE, 0);
     state->hide_text_check = hide_text_check_widget;
     g_object_set_data(G_OBJECT(dialog), "hide_text_check", hide_text_check_widget);
     g_signal_connect(G_OBJECT(hide_text_check_widget), "toggled", G_CALLBACK(on_hide_toggle), plugin);
+    g_signal_connect(G_OBJECT(hide_text_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
+    
     notifications_check_widget = gtk_check_button_new_with_label(_("Notifications"));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notifications_check_widget), plugin->hide_notifications);
     gtk_box_pack_start(GTK_BOX(options_hbox), notifications_check_widget, FALSE, FALSE, 0);
     state->notifications_check = notifications_check_widget;
     g_object_set_data(G_OBJECT(dialog), "notifications_check", notifications_check_widget);
+    /* Для Notifications используем только on_any_setting_changed */
     g_signal_connect(G_OBJECT(notifications_check_widget), "toggled", G_CALLBACK(on_any_setting_changed), plugin);
     
     /* Anti-flapping */
@@ -1027,6 +1035,12 @@ void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
     } else if (widget == state->custom_time_entry) {
         state->dirty_timeout = TRUE;
         DEBUG_TRACE("  dirty_timeout = TRUE");
+    } else if (widget == state->hide_icon_check || 
+               widget == state->hide_text_check || 
+               widget == state->notifications_check) {
+        /* Hide настройки */
+        state->dirty_name = TRUE;
+        DEBUG_TRACE("  dirty_name = TRUE (hide option changed)");
     } else if (GTK_IS_ENTRY(widget)) {
         /* Проверяем, является ли виджет полем ввода имени или иконки */
         GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(widget)));
@@ -1062,17 +1076,27 @@ void on_any_setting_changed(GtkWidget *widget, AsusdBatteryPlugin *plugin) {
 
 void on_hide_toggle(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin) {
     if (!plugin || plugin->is_disposing) return;
+    if (plugin->dialog_state->syncing_ui) return;
+    
     GtkWidget *dialog = GTK_WIDGET(gtk_widget_get_toplevel(GTK_WIDGET(toggle_button)));
     if (!dialog) return;
     GtkWidget *hide_icon_check = g_object_get_data(G_OBJECT(dialog), "hide_icon_check");
     GtkWidget *hide_text_check = g_object_get_data(G_OBJECT(dialog), "hide_text_check");
     gboolean icon_active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(hide_icon_check));
     gboolean text_active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(hide_text_check));
+    
+    /* Запрещаем скрывать и иконку, и текст одновременно */
     if (icon_active && text_active) {
         if (toggle_button == GTK_TOGGLE_BUTTON(hide_icon_check))
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hide_text_check), FALSE);
         else
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hide_icon_check), FALSE);
+    }
+    
+    /* Устанавливаем dirty флаги для всех Hide настроек */
+    if (plugin->dialog_state) {
+        plugin->dialog_state->dirty_name = TRUE;
+        DEBUG_TRACE("on_hide_toggle: dirty_name = TRUE (hide options changed)");
     }
 }
 
