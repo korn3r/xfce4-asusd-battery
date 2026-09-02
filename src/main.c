@@ -1,4 +1,4 @@
-	/* src/main.c */
+/* src/main.c */
 #include "plugin.h"
 #include "utils.h"
 #include "profile-manager.h"
@@ -12,6 +12,12 @@
 #include <xfconf/xfconf.h>
 #include "debug.h"
 
+/* Константы состояния ASUSD (если не определены в plugin.h) */
+#ifndef ASUSD_STATE_UNAVAILABLE
+#define ASUSD_STATE_UNAVAILABLE 0
+#define ASUSD_STATE_CONNECTING  1
+#define ASUSD_STATE_AVAILABLE   2
+#endif
 
 /* ========== Forward declarations ========== */
 
@@ -19,7 +25,6 @@
 void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin);
 void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
 void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data);
-gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin);
 void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
 void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
 
@@ -28,62 +33,32 @@ void create_about_dialog(AsusdBatteryPlugin *plugin);
 
 /* ========== GObject определения ========== */
 
-G_DEFINE_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, G_TYPE_OBJECT)
+G_DEFINE_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, XFCE_TYPE_PANEL_PLUGIN)
 
-static void asusd_battery_plugin_dispose(GObject *object) {
-    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
-    
-    if (plugin->is_disposing) return;
-    plugin->is_disposing = TRUE;
-    
-    DEBUG_TRACE("AsusdBatteryPlugin: dispose");
-    
-    asusd_cleanup(plugin);
-    
-    G_OBJECT_CLASS(asusd_battery_plugin_parent_class)->dispose(object);
+static void asusd_battery_plugin_about(XfcePanelPlugin *plugin) {
+    AsusdBatteryPlugin *plugin_data = g_object_get_data(G_OBJECT(plugin), "plugin_data");
+    if (plugin_data) {
+        create_about_dialog(plugin_data);
+    }
 }
 
-static void asusd_battery_plugin_finalize(GObject *object) {
-    AsusdBatteryPlugin *plugin = ASUSD_BATTERY_PLUGIN(object);
-    
-    DEBUG_TRACE("AsusdBatteryPlugin: finalize");
-    
-    /* Очищаем таймер уведомлений */
-    if (plugin->notification_timeout_id > 0) {
-        g_source_remove(plugin->notification_timeout_id);
-        plugin->notification_timeout_id = 0;
+static void asusd_battery_plugin_configure(XfcePanelPlugin *plugin) {
+    AsusdBatteryPlugin *plugin_data = g_object_get_data(G_OBJECT(plugin), "plugin_data");
+    if (plugin_data) {
+        create_settings_dialog(plugin_data);
     }
-    g_free(plugin->pending_notification_profile);
-    g_free(plugin->last_notified_profile);
-    
-    g_free(plugin->current_profile);
-    g_free(plugin->auto_switch_ac_profile);
-    g_free(plugin->auto_switch_battery_profile);
-    g_free(plugin->last_displayed_profile);
-    
-    if (plugin->profiles) {
-        g_ptr_array_free(plugin->profiles, TRUE);
-        plugin->profiles = NULL;
-    }
-    if (plugin->profile_lookup) {
-        g_hash_table_destroy(plugin->profile_lookup);
-        plugin->profile_lookup = NULL;
-    }
-    if (plugin->dialog_state) {
-        g_free(plugin->dialog_state);
-        plugin->dialog_state = NULL;
-    }
-    
-    G_OBJECT_CLASS(asusd_battery_plugin_parent_class)->finalize(object);
 }
 
 static void asusd_battery_plugin_class_init(AsusdBatteryPluginClass *klass) {
-    GObjectClass *object_class = G_OBJECT_CLASS(klass);
-    object_class->dispose = asusd_battery_plugin_dispose;
-    object_class->finalize = asusd_battery_plugin_finalize;
+    XfcePanelPluginClass *plugin_class = XFCE_PANEL_PLUGIN_CLASS(klass);
+    
+    /* Переопределяем виртуальные методы (как в xkb-plugin) */
+    plugin_class->about = asusd_battery_plugin_about;
+    plugin_class->configure_plugin = asusd_battery_plugin_configure;
 }
 
 static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
+    /* Инициализация полей */
     plugin->current_profile = g_strdup("balanced");
     plugin->asusd_state = ASUSD_STATE_UNAVAILABLE;
     plugin->hide_icon = FALSE;
@@ -112,14 +87,10 @@ static void asusd_battery_plugin_init(AsusdBatteryPlugin *plugin) {
     plugin->profile_lookup = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
     plugin->asusd_retry_timeout_id = 0;
     plugin->reconnecting = FALSE;
-    
-    /* Notification debounce */
     plugin->notification_timeout_id = 0;
     plugin->pending_notification_profile = NULL;
     plugin->last_notified_profile = NULL;
 }
-
-/* ========== Обновление отображения ========== */
 
 
 /* Отправка уведомления с задержкой 2 секунды */
@@ -167,7 +138,7 @@ static gboolean send_delayed_notification(gpointer user_data) {
 }
 
 /* Запланировать уведомление с задержкой */
-static void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile) {
+void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile) {
     if (!plugin || !profile) return;
     
     /* Если уведомления скрыты — не отправляем */
@@ -542,24 +513,6 @@ void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data)
     g_object_unref(plugin);
 }
 
-gboolean on_button_press(G_GNUC_UNUSED GtkWidget *widget, GdkEventButton *event, AsusdBatteryPlugin *plugin) {
-    if (!plugin || plugin->is_disposing) return FALSE;
-    if (event->button == 3) {
-        GtkWidget *menu = gtk_menu_new();
-        if (!menu) return FALSE;
-        GtkWidget *item = gtk_menu_item_new_with_label(_("Settings"));
-        if (item) { g_signal_connect(G_OBJECT(item), "activate", G_CALLBACK(on_menu_configure), plugin); gtk_menu_shell_append(GTK_MENU_SHELL(menu), item); }
-        item = gtk_separator_menu_item_new();
-        if (item) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-        item = gtk_menu_item_new_with_label(_("About"));
-        if (item) { g_signal_connect(G_OBJECT(item), "activate", G_CALLBACK(on_menu_about), plugin); gtk_menu_shell_append(GTK_MENU_SHELL(menu), item); }
-        gtk_widget_show_all(menu);
-        gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent*)event);
-        return TRUE;
-    }
-    return FALSE;
-}
-
 void on_menu_configure(G_GNUC_UNUSED GtkMenuItem *item, AsusdBatteryPlugin *plugin) { 
     if (!plugin || plugin->is_disposing) return; 
     create_settings_dialog(plugin); 
@@ -666,11 +619,21 @@ void asusd_battery_plugin_construct(XfcePanelPlugin *plugin) {
         gtk_widget_hide(plugin_data->label);
     }
     
-    /* 8. Инициализируем ASUSD */
+    /* 8. Добавляем стандартные пункты в меню плагина (как в xkb-plugin) */
+    /* Добавляем стандартные пункты в меню плагина (как в xkb-plugin) */
+    xfce_panel_plugin_menu_show_configure(plugin);
+    xfce_panel_plugin_menu_show_about(plugin);
+    
+    /* Подключаем сигналы, чтобы пункты меню работали */
+    g_signal_connect(plugin, "configure-plugin", 
+                     G_CALLBACK(on_menu_configure), plugin_data);
+    g_signal_connect(plugin, "about", 
+                     G_CALLBACK(on_menu_about), plugin_data);
+    
+    /* Инициализируем ASUSD */
     asusd_init_async(plugin_data);
     
     g_signal_connect(G_OBJECT(plugin_data->button), "clicked", G_CALLBACK(on_button_clicked), plugin_data);
-    g_signal_connect(G_OBJECT(plugin_data->button), "button-press-event", G_CALLBACK(on_button_press), plugin_data);
     gtk_container_add(GTK_CONTAINER(plugin), plugin_data->button);
     
     create_upower_proxy_async(plugin_data);

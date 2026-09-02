@@ -1,117 +1,115 @@
-/* include/plugin.h */
 #ifndef PLUGIN_H
 #define PLUGIN_H
 
 #include <gtk/gtk.h>
-#include <glib.h>
-#include <gio/gio.h>
 #include <libxfce4panel/libxfce4panel.h>
 
-/* ========== Forward declarations ========== */
-typedef struct _AsusdBatteryPlugin AsusdBatteryPlugin;
-typedef struct _AsusdBatteryPluginClass AsusdBatteryPluginClass;
-typedef struct _ProfileSettings ProfileSettings;
-typedef struct _SettingsDialogState SettingsDialogState;
+G_BEGIN_DECLS
 
 /* ========== ASUSD состояния ========== */
+#define ASUSD_STATE_UNAVAILABLE 0
+#define ASUSD_STATE_CONNECTING  1
+#define ASUSD_STATE_AVAILABLE   2
 
-typedef enum {
-    ASUSD_STATE_UNAVAILABLE = 0,
-    ASUSD_STATE_CONNECTING = 1,
-    ASUSD_STATE_AVAILABLE = 2
-} AsusdState;
+/* ========== GObject определения ========== */
 
-/* ========== Структура плагина ========== */
+#define ASUSD_TYPE_BATTERY_PLUGIN (asusd_battery_plugin_get_type())
+G_DECLARE_FINAL_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, ASUSD, BATTERY_PLUGIN, XfcePanelPlugin)
 
 struct _AsusdBatteryPlugin {
-    GObject parent;
-    gboolean no_battery;
+    XfcePanelPlugin __parent__;
     
-    /* Xfce panel */
+    /* Plugin reference */
     XfcePanelPlugin *plugin;
+    
+    /* UI Elements */
     GtkWidget *button;
-    GtkWidget *box;
     GtkWidget *image;
     GtkWidget *label;
+    GtkWidget *box;
     
-    /* ASUSD */
+    /* D-Bus */
     GDBusProxy *asusd_proxy;
-    GDBusConnection *connection;
-    AsusdState asusd_state;
-    gboolean reconnecting;
-    guint asusd_retry_timeout_id;
-    guint asusd_init_retry_count;
-    guint init_load_state;
-    
-    /* UPower */
     GDBusProxy *upower_proxy;
-    gboolean is_on_ac;
+    GDBusConnection *connection;
+    GCancellable *cancellable;
     
-    /* Profiles */
+    /* Profile data */
     GPtrArray *profiles;
     GHashTable *profile_lookup;
-    char *current_profile;
-    char *last_displayed_profile;
+    gchar *current_profile;
+    gchar *last_displayed_profile;
+    gchar *auto_switch_ac_profile;
+    gchar *auto_switch_battery_profile;
     
-    /* Auto switch settings */
-    char *auto_switch_ac_profile;
-    char *auto_switch_battery_profile;
-    gboolean auto_switch_ac_enabled;
-    gboolean auto_switch_battery_enabled;
-    
-    /* Battery limit */
-    guint8 current_battery_limit;
-    gboolean battery_limit_enabled;
-    
-    /* Display options */
+    /* Settings */
     gboolean hide_icon;
     gboolean hide_text;
     gboolean hide_notifications;
     gboolean enable_antiflapping;
     gboolean custom_time_enabled;
     guint custom_timeout_ms;
+    gboolean no_battery;
+    gboolean battery_limit_enabled;
+    guint8 current_battery_limit;
     
-    /* Dialog */
+    /* ASUSD state */
+    gint asusd_state;
+    gint asusd_init_retry_count;
+    gint init_load_state;
+    gboolean reconnecting;
+    guint asusd_retry_timeout_id;
+    
+    /* UPower state */
+    gboolean is_on_ac;
+    gboolean auto_switch_ac_enabled;
+    gboolean auto_switch_battery_enabled;
+    
+    /* Settings dialog */
+    struct _SettingsDialogState *dialog_state;
     gboolean settings_dialog_open;
     gboolean saving_settings;
     guint dialog_id_counter;
-    SettingsDialogState *dialog_state;
     
-    /* Async operations */
-    GCancellable *cancellable;
-    GQueue *operation_queue;
-    gboolean processing_ops;
-    guint pending_calls;
-    
-    /* Notifications */
+    /* Notification debounce */
     time_t last_notification_time;
     guint notification_timeout_id;
     gchar *pending_notification_profile;
     gchar *last_notified_profile;
     
-    /* State */
+    /* Operations queue */
+    GQueue *operation_queue;
+    gboolean processing_ops;
+    guint pending_calls;
+    
+    /* Disposing flag */
     gboolean is_disposing;
 };
 
-struct _AsusdBatteryPluginClass {
-    GObjectClass parent_class;
-};
-
-/* ========== Type macros ========== */
-
-#define ASUSD_TYPE_BATTERY_PLUGIN (asusd_battery_plugin_get_type())
-#define ASUSD_BATTERY_PLUGIN(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), ASUSD_TYPE_BATTERY_PLUGIN, AsusdBatteryPlugin))
-#define ASUSD_IS_BATTERY_PLUGIN(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), ASUSD_TYPE_BATTERY_PLUGIN))
-#define ASUSD_BATTERY_PLUGIN_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), ASUSD_TYPE_BATTERY_PLUGIN, AsusdBatteryPluginClass))
-#define ASUSD_IS_BATTERY_PLUGIN_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), ASUSD_TYPE_BATTERY_PLUGIN))
-#define ASUSD_BATTERY_PLUGIN_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), ASUSD_TYPE_BATTERY_PLUGIN, AsusdBatteryPluginClass))
-
-GType asusd_battery_plugin_get_type(void) G_GNUC_CONST;
-
 /* ========== Public functions ========== */
 
+/* Основные функции плагина */
 void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify);
 void load_settings(AsusdBatteryPlugin *plugin);
 void save_settings(AsusdBatteryPlugin *plugin);
+
+/* UI Callbacks */
+void on_button_clicked(GtkWidget *widget, AsusdBatteryPlugin *plugin);
+void on_profile_selected(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+void on_set_profile_done(GObject *source, GAsyncResult *res, gpointer user_data);
+void on_menu_configure(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+void on_menu_about(GtkMenuItem *item, AsusdBatteryPlugin *plugin);
+
+/* Notification functions */
+void schedule_notification(AsusdBatteryPlugin *plugin, const gchar *profile);
+
+/* About dialog */
+void create_about_dialog(AsusdBatteryPlugin *plugin);
+void create_settings_dialog(AsusdBatteryPlugin *plugin);
+
+/* Утилиты */
+AsusdBatteryPlugin* get_plugin_ref(gpointer user_data);
+
+G_END_DECLS
 
 #endif /* PLUGIN_H */
