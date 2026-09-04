@@ -11,6 +11,18 @@ G_BEGIN_DECLS
 #define ASUSD_STATE_CONNECTING  1
 #define ASUSD_STATE_AVAILABLE   2
 
+/* Display options */
+#define DEFAULT_FIXED_WIDTH_ENABLED FALSE
+#define DEFAULT_FIXED_WIDTH_VALUE 40
+#define DEFAULT_RIGHT_ICON FALSE
+#define DEFAULT_ALIGN 0 /* Left */
+
+/* XML ключи */
+#define KEY_FIXED_WIDTH_ENABLED "/fixed_width_enabled"
+#define KEY_FIXED_WIDTH_VALUE "/fixed_width_value"
+#define KEY_RIGHT_ICON "/right_icon"
+#define KEY_ALIGN "/align"
+
 /* Anti-flapping */
 #define DEFAULT_TIMEOUT_MS 1500
 
@@ -21,6 +33,11 @@ G_DECLARE_FINAL_TYPE(AsusdBatteryPlugin, asusd_battery_plugin, ASUSD, BATTERY_PL
 
 struct _AsusdBatteryPlugin {
     XfcePanelPlugin __parent__;
+
+    gboolean fixed_width_enabled;
+    guint fixed_width_value;
+    gboolean right_icon;
+    gint align; /* 0=Left, 1=Center, 2=Right */
     
     /* Plugin reference */
     XfcePanelPlugin *plugin;
@@ -90,6 +107,8 @@ struct _AsusdBatteryPlugin {
 };
 
 /* ========== Public functions ========== */
+
+void on_fixed_width_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
 
 /* Основные функции плагина */
 void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify);

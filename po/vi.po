@@ -1,0 +1,235 @@
+# Vietnamese translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Vietnamese <vi@li.org>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Lỗi"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Không thể bắt đầu sạc đầy một lần"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Đã bắt đầu sạc đầy một lần"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "Pin sẽ được sạc đến 100% một lần."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Hồ sơ hiện tại: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Hồ sơ hiệu suất đã thay đổi"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Cân bằng"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Lỗi thay đổi hồ sơ"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Không thể thiết lập hồ sơ qua ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Trình quản lý pin và hồ sơ hiệu suất cho máy tính xách tay ASUS"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Quản lý hồ sơ hiệu suất"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Cài đặt hồ sơ nguồn"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Tự động chuyển hồ sơ"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "Khi cắm điện"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "Khi dùng pin"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Giới hạn sạc"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Giới hạn ở 80%"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Sạc đầy một lần:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Bắt đầu"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Tên hồ sơ và biểu tượng"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "tên biểu tượng"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Tùy chọn hiển thị"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Ẩn:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Biểu tượng"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Văn bản"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Căn chỉnh phần tử:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Trái"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Giữa"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Phải"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Chiều rộng tối thiểu"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Biểu tượng bên phải"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Thông báo"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Ẩn thông báo"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Chống nhấp nháy"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Thời gian:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "ms"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "Giá trị phải từ 100 đến 5000 ms"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Áp dụng"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Đóng"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Sạc pin đến 100%% một lần?\n"
+"\n"
+"Điều này sẽ tạm thời ghi đè giới hạn sạc 80%%.\n"
+"Giới hạn sẽ được khôi phục sau chu kỳ sạc tiếp theo."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Sạc đầy một lần"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Vui lòng nhập một số"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Không có thay đổi"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Cài đặt đã được cập nhật"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Giá trị không hợp lệ"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Thời gian chờ phải từ 100 đến 5000 ms"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Đã áp dụng cài đặt"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "Đã cập nhật cài đặt giao diện"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD không khả dụng. Không thể áp dụng cài đặt."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Lỗi áp dụng cài đặt"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Một số cài đặt không thể áp dụng."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Cài đặt hồ sơ nguồn đã được cập nhật"

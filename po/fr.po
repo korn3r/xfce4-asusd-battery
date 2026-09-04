@@ -1,0 +1,235 @@
+# French translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: French <fr@li.org>\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Erreur"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Échec du lancement de la charge complète unique"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Charge complète unique lancée"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "La batterie sera chargée à 100 % une fois."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Profil actuel : %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Profil de performance modifié"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Équilibré"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Erreur lors du changement de profil"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Échec de la définition du profil via ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Gestionnaire de batterie et de profils de performance pour ordinateurs portables ASUS"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Gérer le profil de performance"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Paramètres du profil d'alimentation"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Changement automatique de profils"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "Sur secteur"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "Sur batterie"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Limite de charge"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Limiter à 80 %"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Charge complète unique :"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Démarrer"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Noms des profils et icônes"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "nom de l'icône"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Options d'affichage"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Masquer :"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Icône"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Texte"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Alignement des éléments :"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Gauche"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Centre"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Droite"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Largeur minimale"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Icône à droite"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Notifications"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Masquer les notifications"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Anti-papillotement"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Temps :"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "ms"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "La valeur doit être comprise entre 100 et 5000 ms"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Appliquer"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Fermer"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Charger la batterie à 100 %% une fois ?\n"
+"\n"
+"Cela remplacera temporairement la limite de charge à 80 %%.\n"
+"La limite sera rétablie après le prochain cycle de charge."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Charge complète unique"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Veuillez saisir un nombre"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Aucun changement"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Les paramètres sont déjà à jour"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Valeur invalide"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Le délai d'attente doit être compris entre 100 et 5000 ms"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Paramètres appliqués"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "Paramètres de l'interface mis à jour"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD n'est pas disponible. Impossible d'appliquer les paramètres."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Erreur lors de l'application des paramètres"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Certains paramètres n'ont pas pu être appliqués."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Les paramètres du profil d'alimentation ont été mis à jour"

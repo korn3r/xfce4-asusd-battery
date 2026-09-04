@@ -114,11 +114,15 @@ For each profile, you can customize:
 
 - Hide icon: Show only text on the panel
 - Hide text: Show only icon on the panel
-- Hide notifications: Dont show app notifications
+- Elements align: select aligment of elements (text and icon) inside plugin container on panel
+- Minimal width: set minimal width for plugin container on panel. Useful if you dont want elements in tray to bounce left and right on profile change because of different profile name lengths
+- Right icon: place icon to the right side from text instead of left side.
 
-# Anti-flapping
+# Notifications
 
-- Enable timeout during which frequent profile changes are ignored ( for example switch Balanced->Performance->Balanced that happens in given timeout would be ignored). Helpful if you have faulty charging cable\port and laptop tends to switch on its own. 
+- Hide notifications: pretty self-explanatory
+- Anti-flapping: Enable timeout during which frequent profile changes are ignored ( for example switch Balanced->Performance->Balanced that happens in given timeout would be ignored). Helpful if you have faulty charging cable\port and laptop tends to switch on its own. 
+- Time: for how long plugin will delay notification for anti-flapping check
 
 # License
 

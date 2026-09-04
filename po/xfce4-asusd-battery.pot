@@ -1,0 +1,234 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR korn3r
+# This file is distributed under the same license as the xfce4-asusd-battery package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr ""
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr ""
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr ""
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr ""
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr ""
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr ""
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr ""
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr ""
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr ""
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr ""
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr ""
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr ""
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr ""
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr ""
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr ""
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr ""
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr ""
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr ""
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr ""
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr ""
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr ""
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr ""
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr ""
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr ""
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr ""
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr ""
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr ""
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr ""
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr ""
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr ""
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr ""
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr ""
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr ""
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr ""
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr ""
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr ""
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr ""
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr ""
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr ""
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr ""
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr ""
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr ""
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr ""
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr ""
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr ""
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr ""
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr ""
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr ""
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr ""
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr ""
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr ""

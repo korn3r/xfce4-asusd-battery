@@ -1,0 +1,235 @@
+# Hindi translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Hindi <hi@li.org>\n"
+"Language: hi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "त्रुटि"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "एक बार पूर्ण चार्ज शुरू करने में विफल"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "एक बार पूर्ण चार्ज शुरू हुआ"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "बैटरी एक बार 100% तक चार्ज होगी।"
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "वर्तमान प्रोफ़ाइल: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "प्रदर्शन प्रोफ़ाइल बदली गई"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "संतुलित"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "प्रोफ़ाइल बदलने में त्रुटि"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "ASUSD के माध्यम से प्रोफ़ाइल सेट करने में विफल"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "ASUS लैपटॉप के लिए बैटरी और प्रदर्शन प्रोफ़ाइल प्रबंधक"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "प्रदर्शन प्रोफ़ाइल प्रबंधित करें"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "पावर प्रोफ़ाइल सेटिंग्स"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "स्वचालित प्रोफ़ाइल स्विच"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "एसी पावर पर"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "बैटरी पर"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "चार्ज सीमा"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "80% तक सीमित करें"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "एक बार पूर्ण चार्ज:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "प्रारंभ करें"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "प्रोफ़ाइल नाम और आइकन"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "आइकन नाम"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "प्रदर्शन विकल्प"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "छिपाएँ:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "आइकन"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "पाठ"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "तत्व संरेखण:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "बाएँ"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "केंद्र"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "दाएँ"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "न्यूनतम चौड़ाई"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "दाएँ आइकन"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "सूचनाएँ"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "सूचनाएँ छिपाएँ"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "झिलमिलाहट रोधी"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "समय:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "मि॰से॰"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "मान 100 से 5000 मि॰से॰ के बीच होना चाहिए"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "लागू करें"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "बंद करें"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"बैटरी को एक बार 100%% तक चार्ज करें?\n"
+"\n"
+"यह अस्थायी रूप से 80%% चार्ज सीमा को ओवरराइड करेगा।\n"
+"सीमा अगले चार्ज चक्र के बाद बहाल हो जाएगी।"
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "एक बार पूर्ण चार्ज"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "कृपया एक संख्या दर्ज करें"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "कोई परिवर्तन नहीं"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "सेटिंग्स पहले से ही अद्यतित हैं"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "अमान्य मान"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "टाइमआउट 100 से 5000 मि॰से॰ के बीच होना चाहिए"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "सेटिंग्स लागू की गईं"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "यूआई सेटिंग्स अद्यतित की गईं"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD उपलब्ध नहीं है। सेटिंग्स लागू नहीं की जा सकतीं।"
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "सेटिंग्स लागू करने में त्रुटि"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "कुछ सेटिंग्स लागू नहीं की जा सकीं।"
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "पावर प्रोफ़ाइल सेटिंग्स अद्यतित की गईं"

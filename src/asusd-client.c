@@ -1386,7 +1386,7 @@ void on_one_shot_done(GObject *source, GAsyncResult *res, gpointer user_data) {
         if (result) g_variant_unref(result);
         DEBUG_DEBUG("xfce4-asusd-battery: One-shot full charge started");
         if (!plugin->hide_notifications)
-            send_notification(_("One-shot full charge started"), _("The battery will charge to 100%% once."), FALSE, "battery-full-symbolic");
+            send_notification(_("One-shot full charge started"), _("The battery will charge to 100% once."), FALSE, "battery-full-symbolic");
     }
     
     g_object_unref(plugin);

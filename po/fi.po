@@ -1,0 +1,235 @@
+# Finnish translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Finnish <fi@li.org>\n"
+"Language: fi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Virhe"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Kertatäyslatauksen käynnistys epäonnistui"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Kertatäyslataus käynnistetty"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "Akku latautuu kerran 100 %:iin."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Nykyinen profiili: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Suorituskykyprofiili vaihdettu"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Tasapainoinen"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Virhe profiilin vaihdossa"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Profiilin asettaminen ASUSD:n kautta epäonnistui"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Akun ja suorituskykyprofiilien hallinta ASUS-kannettaville"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Hallitse suorituskykyprofiilia"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Virranhallintaprofiilin asetukset"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Vaihda profiileja automaattisesti"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "Verkkovirralla"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "Akulla"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Latausraja"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Rajoita 80 %:iin"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Kertatäyslataus:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Käynnistä"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Profiilien nimet ja kuvakkeet"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "kuvakkeen nimi"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Näyttöasetukset"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Piilota:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Kuvake"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Teksti"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Elementtien tasaus:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Vasen"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Keskellä"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Oikea"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Minimileveys"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Kuvake oikealla"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Ilmoitukset"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Piilota ilmoitukset"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Vilkunnan esto"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Aika:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "ms"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "Arvon on oltava välillä 100–5000 ms"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Käytä"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Sulje"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Ladataanko akku kerran 100 %%:iin?\n"
+"\n"
+"Tämä ohittaa väliaikaisesti 80 %%:n latausrajan.\n"
+"Raja palautetaan seuraavan latausjakson jälkeen."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Kertatäyslataus"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Anna numero"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Ei muutoksia"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Asetukset ovat jo ajan tasalla"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Virheellinen arvo"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Aikakatkaisun on oltava välillä 100–5000 ms"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Asetukset käytetty"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "Käyttöliittymän asetukset päivitetty"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD ei ole käytettävissä. Asetuksia ei voida käyttää."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Virhe asetusten käytössä"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Joitakin asetuksia ei voitu käyttää."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Virranhallintaprofiilin asetukset on päivitetty"

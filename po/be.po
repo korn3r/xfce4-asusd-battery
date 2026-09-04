@@ -1,0 +1,235 @@
+# Belarusian translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Belarusian <be@li.org>\n"
+"Language: be\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Памылка"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Не ўдалося запусціць аднаразовую поўную зарадку"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Аднаразовая поўная зарадка запушчана"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "Батарэя будзе зараджана да 100% адзін раз."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Бягучы профіль: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Профіль прадукцыйнасці зменены"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Збалансаваны"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Памылка змены профілю"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Не ўдалося ўсталяваць профіль праз ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Менеджэр батарэі і профіляў прадукцыйнасці для наўтбукаў ASUS"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Кіраванне профілем прадукцыйнасці"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Налады профілю сілкавання"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Аўтаматычнае пераключэнне профіляў"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "Ад сеткі"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "Ад батарэі"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Абмежаванне зарадкі"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Абмежаваць да 80%"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Поўная зарадка адзін раз:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Запусціць"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Назвы профіляў і значкі"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "назва значка"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Параметры адлюстравання"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Схаваць:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Значок"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Тэкст"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Выраўноўванне элементаў:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Злева"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Па цэнтры"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Справа"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Мінімальная шырыня"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Значок справа"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Апавяшчэнні"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Схаваць апавяшчэнні"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Анты-мігаценне"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Час:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "мс"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "Значэнне павінна быць ад 100 да 5000 мс"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Прымяніць"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Закрыць"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Зарадзіць батарэю да 100%% адзін раз?\n"
+"\n"
+"Гэта часова адменіць абмежаванне зарадкі ў 80%%.\n"
+"Абмежаванне будзе адноўлена пасля наступнага цыкла зарадкі."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Аднаразовая поўная зарадка"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Калі ласка, увядзіце лік"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Няма змен"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Налады ўжо актуальныя"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Няправільнае значэнне"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Таймаўт павінен быць ад 100 да 5000 мс"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Налады прымянёны"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "Налады інтэрфейсу абноўлены"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD недаступны. Немагчыма прымяніць налады."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Памылка прымянення налад"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Некаторыя налады не ўдалося прымяніць."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Налады профілю сілкавання абноўлены"

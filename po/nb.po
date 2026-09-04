@@ -1,0 +1,235 @@
+# Norwegian Bokmål translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Norwegian Bokmål <nb@li.org>\n"
+"Language: nb\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Feil"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Kunne ikke starte engangsfullading"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Engangsfullading startet"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "Batteriet vil lades til 100 % én gang."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Gjeldende profil: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Ytelsesprofil endret"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Balansert"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Feil ved endring av profil"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Kunne ikke angi profil via ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Batteri- og ytelsesprofilbehandler for ASUS bærbare"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Administrer ytelsesprofil"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Strømprofilinnstillinger"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Automatisk bytte profiler"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "På nettstrøm"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "På batteri"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Ladegrense"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Begrens til 80 %"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Fullading én gang:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Start"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Profilnavn og ikoner"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "ikonnavn"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Visningsalternativer"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Skjul:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Ikon"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Tekst"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Elementjustering:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Venstre"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Sentrert"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Høyre"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Minimal bredde"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Ikon til høyre"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Varsler"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Skjul varsler"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Anti-flimring"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Tid:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "ms"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "Verdien må være mellom 100 og 5000 ms"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Bruk"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Lukk"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Lade batteriet til 100 %% én gang?\n"
+"\n"
+"Dette vil midlertidig overstyre 80 %%-grensen.\n"
+"Grensen vil bli gjenopprettet etter neste ladesyklus."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Engangsfullading"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Vennligst skriv inn et tall"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Ingen endringer"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Innstillingene er allerede oppdatert"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Ugyldig verdi"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Tidsavbrudd må være mellom 100 og 5000 ms"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Innstillinger brukt"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "UI-innstillinger oppdatert"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD er ikke tilgjengelig. Kan ikke bruke innstillinger."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Feil ved bruk av innstillinger"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Noen innstillinger kunne ikke brukes."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Strømprofilinnstillinger er oppdatert"

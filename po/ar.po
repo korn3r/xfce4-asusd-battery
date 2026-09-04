@@ -1,0 +1,235 @@
+# Arabic translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Arabic <ar@li.org>\n"
+"Language: ar\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "خطأ"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "فشل بدء الشحن الكامل لمرة واحدة"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "بدأ الشحن الكامل لمرة واحدة"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "سيتم شحن البطارية إلى ١٠٠٪ مرة واحدة."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "الملف الحالي: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "تم تغيير ملف الأداء"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "متوازن"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "خطأ في تغيير الملف"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "فشل تعيين الملف عبر ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "مدير البطارية وملفات الأداء لأجهزة ASUS المحمولة"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "إدارة ملف الأداء"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "إعدادات ملف الطاقة"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "التبديل التلقائي للملفات"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "على التيار المتردد"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "على البطارية"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "حد الشحن"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "تحديد إلى ٨٠٪"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "شحن كامل لمرة واحدة:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "بدء"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "أسماء الملفات والأيقونات"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "اسم الأيقونة"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "خيارات العرض"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "إخفاء:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "أيقونة"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "نص"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "محاذاة العناصر:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "يسار"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "وسط"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "يمين"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "الحد الأدنى للعرض"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "أيقونة يمين"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "الإشعارات"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "إخفاء الإشعارات"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "مكافحة الوميض"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "الوقت:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "مللي ثانية"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "يجب أن تكون القيمة بين ١٠٠ و ٥٠٠٠ مللي ثانية"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "تطبيق"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "إغلاق"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"شحن البطارية إلى ١٠٠٪٪ مرة واحدة؟\n"
+"\n"
+"سيؤدي هذا إلى تجاوز حد الشحن ٨٠٪٪ مؤقتًا.\n"
+"سيتم استعادة الحد بعد دورة الشحن التالية."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "شحن كامل لمرة واحدة"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "الرجاء إدخال رقم"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "لا توجد تغييرات"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "الإعدادات محدثة بالفعل"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "قيمة غير صالحة"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "يجب أن يكون المهلة بين ١٠٠ و ٥٠٠٠ مللي ثانية"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "تم تطبيق الإعدادات"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "تم تحديث إعدادات الواجهة"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD غير متوفر. لا يمكن تطبيق الإعدادات."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "خطأ في تطبيق الإعدادات"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "تعذر تطبيق بعض الإعدادات."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "تم تحديث إعدادات ملف الطاقة"

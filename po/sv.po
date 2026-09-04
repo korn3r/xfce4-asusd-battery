@@ -1,0 +1,235 @@
+# Swedish translations for xfce4-asusd-battery package.
+# Copyright (C) 2026 korn3r
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: xfce4-asusd-battery 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-04 09:18+0300\n"
+"PO-Revision-Date: 2026-09-04 12:00+0300\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Swedish <sv@li.org>\n"
+"Language: sv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/asusd-client.c:1383 src/settings-dialog.c:1555
+msgid "Error"
+msgstr "Fel"
+
+#: src/asusd-client.c:1383
+msgid "Failed to start one-shot full charge"
+msgstr "Misslyckades med att starta engångs-full laddning"
+
+#: src/asusd-client.c:1389
+msgid "One-shot full charge started"
+msgstr "Engångs-full laddning startad"
+
+#: src/asusd-client.c:1389
+#, c-format
+msgid "The battery will charge to 100% once."
+msgstr "Batteriet laddas till 100 % en gång."
+
+#: src/main.c:134 src/main.c:182
+#, c-format
+msgid "Current profile: %s"
+msgstr "Aktuell profil: %s"
+
+#: src/main.c:135 src/main.c:183
+msgid "Performance profile changed"
+msgstr "Prestandaprofil ändrad"
+
+#: src/main.c:367
+msgid "Balanced"
+msgstr "Balanserad"
+
+#: src/main.c:615
+msgid "Error changing profile"
+msgstr "Fel vid ändring av profil"
+
+#: src/main.c:615
+msgid "Failed to set profile via ASUSD"
+msgstr "Misslyckades med att ställa in profil via ASUSD"
+
+#: src/main.c:649
+msgid "Battery and performance profile manager for ASUS laptops"
+msgstr "Batteri- och prestandaprofilhanterare för ASUS-bärbara"
+
+#: src/main.c:699
+msgid "Manage performance profile"
+msgstr "Hantera prestandaprofil"
+
+#: src/settings-dialog.c:670
+msgid "Power Profile Settings"
+msgstr "Strömprofilinställningar"
+
+#: src/settings-dialog.c:690
+msgid "Auto switch profiles"
+msgstr "Automatiskt växla profiler"
+
+#: src/settings-dialog.c:699
+msgid "On AC"
+msgstr "På nätström"
+
+#: src/settings-dialog.c:744
+msgid "On Battery"
+msgstr "På batteri"
+
+#: src/settings-dialog.c:790
+msgid "Charge limit"
+msgstr "Laddningsgräns"
+
+#: src/settings-dialog.c:801
+msgid "Limit to 80%"
+msgstr "Begränsa till 80 %"
+
+#: src/settings-dialog.c:809
+msgid "Full charge once:"
+msgstr "Full laddning en gång:"
+
+#: src/settings-dialog.c:811
+msgid "Start"
+msgstr "Starta"
+
+#: src/settings-dialog.c:816
+msgid "Profile names and icons"
+msgstr "Profilnamn och ikoner"
+
+#: src/settings-dialog.c:864
+msgid "icon name"
+msgstr "ikonnamn"
+
+#: src/settings-dialog.c:874
+msgid "Display options"
+msgstr "Visningsalternativ"
+
+#: src/settings-dialog.c:885
+msgid "Hide:"
+msgstr "Dölj:"
+
+#: src/settings-dialog.c:888
+msgid "Icon"
+msgstr "Ikon"
+
+#: src/settings-dialog.c:896
+msgid "Text"
+msgstr "Text"
+
+#: src/settings-dialog.c:909
+msgid "Elements align:"
+msgstr "Elementjustering:"
+
+#: src/settings-dialog.c:913
+msgid "Left"
+msgstr "Vänster"
+
+#: src/settings-dialog.c:914
+msgid "Center"
+msgstr "Centrera"
+
+#: src/settings-dialog.c:915
+msgid "Right"
+msgstr "Höger"
+
+#: src/settings-dialog.c:927
+msgid "Minimal width"
+msgstr "Minimal bredd"
+
+#: src/settings-dialog.c:945
+msgid "Right icon"
+msgstr "Ikon till höger"
+
+#: src/settings-dialog.c:952
+msgid "Notifications"
+msgstr "Aviseringar"
+
+#: src/settings-dialog.c:964
+msgid "Hide notifications"
+msgstr "Dölj aviseringar"
+
+#: src/settings-dialog.c:978
+msgid "Anti-flapping"
+msgstr "Anti-fladder"
+
+#: src/settings-dialog.c:986
+msgid "Time:"
+msgstr "Tid:"
+
+#: src/settings-dialog.c:1009
+msgid "ms"
+msgstr "ms"
+
+#: src/settings-dialog.c:1012 src/settings-dialog.c:1331
+msgid "Value must be between 100 and 5000 ms"
+msgstr "Värdet måste vara mellan 100 och 5000 ms"
+
+#: src/settings-dialog.c:1030
+msgid "Apply"
+msgstr "Tillämpa"
+
+#: src/settings-dialog.c:1034
+msgid "Close"
+msgstr "Stäng"
+
+#: src/settings-dialog.c:1294
+#, c-format
+msgid ""
+"Charge battery to 100%% once?\n"
+"\n"
+"This will temporarily override the 80%% charge limit.\n"
+"The limit will be restored after the next charge cycle."
+msgstr ""
+"Ladda batteriet till 100 %% en gång?\n"
+"\n"
+"Detta åsidosätter tillfälligt 80 %%-gränsen.\n"
+"Gränsen återställs efter nästa laddningscykel."
+
+#: src/settings-dialog.c:1296
+msgid "One-shot full charge"
+msgstr "Engångs-full laddning"
+
+#: src/settings-dialog.c:1325
+msgid "Please enter a number"
+msgstr "Ange ett nummer"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "No changes"
+msgstr "Inga ändringar"
+
+#: src/settings-dialog.c:1362 src/settings-dialog.c:1588
+msgid "Settings are already up to date"
+msgstr "Inställningarna är redan uppdaterade"
+
+#: src/settings-dialog.c:1513
+msgid "Invalid value"
+msgstr "Ogiltigt värde"
+
+#: src/settings-dialog.c:1514
+msgid "Timeout must be between 100 and 5000 ms"
+msgstr "Timeout måste vara mellan 100 och 5000 ms"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+#: src/settings-dialog.c:1790
+msgid "Settings applied"
+msgstr "Inställningar tillämpade"
+
+#: src/settings-dialog.c:1547 src/settings-dialog.c:1591
+msgid "UI settings updated"
+msgstr "UI-inställningar uppdaterade"
+
+#: src/settings-dialog.c:1555
+msgid "ASUSD is not available. Cannot apply settings."
+msgstr "ASUSD är inte tillgänglig. Kan inte tillämpa inställningar."
+
+#: src/settings-dialog.c:1774
+msgid "Error applying settings"
+msgstr "Fel vid tillämpning av inställningar"
+
+#: src/settings-dialog.c:1775
+msgid "Some settings could not be applied."
+msgstr "Vissa inställningar kunde inte tillämpas."
+
+#: src/settings-dialog.c:1790
+msgid "Power profile settings have been updated"
+msgstr "Strömprofilinställningarna har uppdaterats"

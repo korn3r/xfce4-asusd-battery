@@ -239,7 +239,6 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         g_hash_table_iter_init(&iter, plugin->profile_lookup);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
             ProfileSettings *settings = (ProfileSettings*)value;
-            /* Сравниваем с default_name (ID) */
             if (settings->default_name && g_strcmp0(profile, settings->default_name) == 0) {
                 if (settings->name && strlen(settings->name) > 0) {
                     display_profile = settings->name;
@@ -261,20 +260,72 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
     DEBUG_TRACE("  profile = '%s'", profile);
     DEBUG_TRACE("  display_profile = '%s'", display_profile ? display_profile : "NULL");
     DEBUG_TRACE("  last_displayed_profile = '%s'", plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL");
+    DEBUG_TRACE("  current_profile = '%s'", plugin->current_profile ? plugin->current_profile : "NULL");
     
     gboolean profile_changed = FALSE;
     if (should_notify && !plugin->hide_notifications && plugin->asusd_state == ASUSD_STATE_AVAILABLE) {
-        if (plugin->last_displayed_profile == NULL || g_strcmp0(plugin->last_displayed_profile, profile) != 0)
+        if (plugin->last_displayed_profile == NULL || g_strcmp0(plugin->last_displayed_profile, profile) != 0) {
             profile_changed = TRUE;
+            DEBUG_TRACE("  profile_changed: last='%s' -> new='%s'", 
+                        plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL", 
+                        profile);
+        } else {
+            DEBUG_TRACE("  profile_changed: last='%s' == new='%s' (NO CHANGE)", 
+                        plugin->last_displayed_profile ? plugin->last_displayed_profile : "NULL", 
+                        profile);
+        }
     }
     
     g_free(plugin->last_displayed_profile);
     plugin->last_displayed_profile = g_strdup(profile);
     
-    if (plugin->hide_icon) gtk_widget_hide(plugin->image);
-    else gtk_widget_show(plugin->image);
-    if (plugin->hide_text) gtk_widget_hide(plugin->label);
-    else gtk_widget_show(plugin->label);
+    /* ===== Применяем настройки видимости ===== */
+    if (plugin->hide_icon) {
+        gtk_widget_hide(plugin->image);
+    } else {
+        gtk_widget_show(plugin->image);
+    }
+    if (plugin->hide_text) {
+        gtk_widget_hide(plugin->label);
+    } else {
+        gtk_widget_show(plugin->label);
+    }
+    
+    /* ===== Настройки Fixed width, Right icon, Align ===== */
+    
+    /* Устанавливаем ширину кнопки, если включено Fixed width */
+    if (plugin->fixed_width_enabled && plugin->fixed_width_value > 0) {
+        gtk_widget_set_size_request(plugin->button, plugin->fixed_width_value, -1);
+        DEBUG_TRACE("  fixed_width: %d", plugin->fixed_width_value);
+    } else {
+        gtk_widget_set_size_request(plugin->button, -1, -1);
+    }
+    
+    /* Устанавливаем выравнивание содержимого */
+    GtkWidget *parent = gtk_widget_get_parent(plugin->box);
+    if (parent == plugin->button) {
+        if (plugin->align == 0) { /* Left */
+            gtk_widget_set_halign(plugin->box, GTK_ALIGN_START);
+        } else if (plugin->align == 1) { /* Center */
+            gtk_widget_set_halign(plugin->box, GTK_ALIGN_CENTER);
+        } else { /* Right */
+            gtk_widget_set_halign(plugin->box, GTK_ALIGN_END);
+        }
+        DEBUG_TRACE("  align: %d", plugin->align);
+    }
+    
+    /* Применяем Right icon — меняем порядок упаковки */
+    if (plugin->right_icon && !plugin->hide_icon) {
+        /* Перемещаем иконку в конец (справа) */
+        gtk_box_reorder_child(GTK_BOX(plugin->box), plugin->image, -1);
+        gtk_box_reorder_child(GTK_BOX(plugin->box), plugin->label, 0);
+        DEBUG_TRACE("  right_icon: TRUE");
+    } else {
+        /* Возвращаем иконку в начало (слева) */
+        gtk_box_reorder_child(GTK_BOX(plugin->box), plugin->image, 0);
+        gtk_box_reorder_child(GTK_BOX(plugin->box), plugin->label, 1);
+        DEBUG_TRACE("  right_icon: FALSE");
+    }
     
     if (profile && g_strcmp0(profile, "unknown") != 0) {
         const gchar *icon_name = NULL;
@@ -296,7 +347,6 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         
         if (!plugin->hide_text) {
             gchar *display_text = g_strdup(display_profile);
-            /* Делаем первую букву заглавной только для стандартных имен */
             if (g_strcmp0(display_profile, "balanced") == 0 || 
                 g_strcmp0(display_profile, "performance") == 0 || 
                 g_strcmp0(display_profile, "quiet") == 0 ||
@@ -318,10 +368,29 @@ void update_profile_display(AsusdBatteryPlugin *plugin, gboolean should_notify) 
         gtk_image_set_from_icon_name(GTK_IMAGE(plugin->image), "battery-good-symbolic", GTK_ICON_SIZE_MENU);
     }
     
+    /* Еще раз применяем настройки видимости после установки иконки/текста */
+    if (plugin->hide_icon) {
+        gtk_widget_hide(plugin->image);
+    } else {
+        gtk_widget_show(plugin->image);
+    }
+    if (plugin->hide_text) {
+        gtk_widget_hide(plugin->label);
+    } else {
+        gtk_widget_show(plugin->label);
+    }
+    
     if (profile_changed && profile && g_strcmp0(profile, "unknown") != 0 && can_send_notification(plugin)) {
         DEBUG_TRACE("  >>> SCHEDULING NOTIFICATION for profile: %s", profile);
         schedule_notification(plugin, profile);
+    } else {
+        if (!profile_changed) {
+            DEBUG_TRACE("  >>> NOTIFICATION NOT SCHEDULED: profile_changed=FALSE");
+        } else if (!can_send_notification(plugin)) {
+            DEBUG_TRACE("  >>> NOTIFICATION NOT SCHEDULED: can_send_notification=FALSE");
+        }
     }
+    
     DEBUG_TRACE("=== end update_profile_display ===");
 }
 
@@ -341,15 +410,21 @@ void load_settings(AsusdBatteryPlugin *plugin) {
     plugin->hide_text = xfconf_channel_get_bool(channel, "/hide_text", FALSE);
     plugin->hide_notifications = xfconf_channel_get_bool(channel, "/hide_notifications", FALSE);
     
+    /* Новые настройки Display options */
+    plugin->fixed_width_enabled = xfconf_channel_get_bool(channel, KEY_FIXED_WIDTH_ENABLED, DEFAULT_FIXED_WIDTH_ENABLED);
+    plugin->fixed_width_value = xfconf_channel_get_uint(channel, KEY_FIXED_WIDTH_VALUE, DEFAULT_FIXED_WIDTH_VALUE);
+    plugin->right_icon = xfconf_channel_get_bool(channel, KEY_RIGHT_ICON, DEFAULT_RIGHT_ICON);
+    plugin->align = xfconf_channel_get_int(channel, KEY_ALIGN, DEFAULT_ALIGN);
+    
     /* Anti-flapping settings */
     plugin->enable_antiflapping = xfconf_channel_get_bool(channel, "/enable_antiflapping", FALSE);
     plugin->custom_time_enabled = xfconf_channel_get_bool(channel, "/custom_time_enabled", FALSE);
-    plugin->custom_timeout_ms = xfconf_channel_get_uint(channel, "/custom_timeout_ms", 1500);
+    plugin->custom_timeout_ms = xfconf_channel_get_uint(channel, "/custom_timeout_ms", DEFAULT_TIMEOUT_MS);
     if (plugin->custom_timeout_ms == 0) {
-        plugin->custom_timeout_ms = 1500;
+        plugin->custom_timeout_ms = DEFAULT_TIMEOUT_MS;
     }
     
-    /* No battery — только в файле настроек, без UI */
+    /* No battery */
     plugin->no_battery = xfconf_channel_get_bool(channel, "/no_battery", FALSE);
     
     /* Загружаем пользовательские имена и иконки */
@@ -392,12 +467,16 @@ void save_settings(AsusdBatteryPlugin *plugin) {
     xfconf_channel_set_bool(channel, "/hide_text", plugin->hide_text);
     xfconf_channel_set_bool(channel, "/hide_notifications", plugin->hide_notifications);
     
+    /* Новые настройки Display options */
+    xfconf_channel_set_bool(channel, KEY_FIXED_WIDTH_ENABLED, plugin->fixed_width_enabled);
+    xfconf_channel_set_uint(channel, KEY_FIXED_WIDTH_VALUE, plugin->fixed_width_value);
+    xfconf_channel_set_bool(channel, KEY_RIGHT_ICON, plugin->right_icon);
+    xfconf_channel_set_int(channel, KEY_ALIGN, plugin->align);
+    
     /* Anti-flapping settings */
     xfconf_channel_set_bool(channel, "/enable_antiflapping", plugin->enable_antiflapping);
     xfconf_channel_set_bool(channel, "/custom_time_enabled", plugin->custom_time_enabled);
     xfconf_channel_set_uint(channel, "/custom_timeout_ms", plugin->custom_timeout_ms);
-    
-    /* No battery — только в файле настроек, без UI */
     xfconf_channel_set_bool(channel, "/no_battery", plugin->no_battery);
     
     /* Сохраняем пользовательские имена и иконки */
@@ -405,7 +484,6 @@ void save_settings(AsusdBatteryPlugin *plugin) {
         for (guint i = 0; i < plugin->profiles->len; i++) {
             ProfileSettings *settings = g_ptr_array_index(plugin->profiles, i);
             
-            /* Сохраняем имя */
             gchar *key = g_strdup_printf("/profile_%d_name", settings->enum_value);
             if (settings->name && strlen(settings->name) > 0) {
                 xfconf_channel_set_string(channel, key, settings->name);
@@ -414,9 +492,7 @@ void save_settings(AsusdBatteryPlugin *plugin) {
             }
             g_free(key);
             
-            /* Сохраняем иконку — только если она НЕ является иконкой по умолчанию */
             key = g_strdup_printf("/profile_%d_icon", settings->enum_value);
-            
             const char *default_icon = NULL;
             if (g_strcmp0(settings->default_name, "performance") == 0) {
                 default_icon = "battery-full-symbolic";

@@ -17,6 +17,17 @@ typedef struct _SettingsDialogState {
     GtkWidget *hide_icon_check;
     GtkWidget *hide_text_check;
     GtkWidget *notifications_check;
+
+    /* Новые Display options */
+    GtkWidget *fixed_width_check;
+    GtkWidget *fixed_width_entry;
+    GtkWidget *right_icon_check;
+    GtkWidget *align_combo;
+    
+    /* Dirty флаги */
+    gboolean dirty_fixed_width;
+    gboolean dirty_right_icon;
+    gboolean dirty_align;
     
     /* Anti-flapping */
     GtkWidget *antiflapping_check;
@@ -57,6 +68,8 @@ typedef struct _SettingsApplyContext {
     char **error_messages;
     int error_count;
 } SettingsApplyContext;
+
+void on_notifications_toggled(GtkToggleButton *toggle_button, AsusdBatteryPlugin *plugin);
 
 /* ========== Public functions ========== */
 
