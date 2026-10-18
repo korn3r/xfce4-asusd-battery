@@ -1613,6 +1613,19 @@ void on_apply_clicked(GtkButton *button, AsusdBatteryPlugin *plugin) {
     ctx->error_messages = NULL;
     ctx->error_count = 0;
     
+    /* ===== ВАЖНО: Сбрасываем dirty флаги для профилей, если значения совпадают ===== */
+    /* Это защита от ложных срабатываний */
+    if (state->dirty_ac_profile && new_ac_profile && 
+        g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) == 0) {
+        state->dirty_ac_profile = FALSE;
+        DEBUG_TRACE("  dirty_ac_profile reset: values match");
+    }
+    if (state->dirty_battery_profile && new_battery_profile && 
+        g_strcmp0(new_battery_profile, plugin->auto_switch_battery_profile) == 0) {
+        state->dirty_battery_profile = FALSE;
+        DEBUG_TRACE("  dirty_battery_profile reset: values match");
+    }
+    
     if (state->dirty_ac_enabled && new_ac_enabled != plugin->auto_switch_ac_enabled) ctx->total_steps++;
     if (state->dirty_battery_enabled && new_battery_enabled != plugin->auto_switch_battery_enabled) ctx->total_steps++;
     if (state->dirty_ac_profile && new_ac_profile && g_strcmp0(new_ac_profile, plugin->auto_switch_ac_profile) != 0) ctx->total_steps++;
@@ -1659,7 +1672,21 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     int step = ctx->current_step;
     int applied = 0;
     
+    /* ===== 1. СНАЧАЛА ПРИМЕНЯЕМ ЛИМИТ ЗАРЯДА ===== */
+    if (step == applied && ctx->new_limit != plugin->current_battery_limit) {
+        DEBUG_TRACE("  Applying ChargeControlEndThreshold: %d -> %d", 
+                    plugin->current_battery_limit, ctx->new_limit);
+        asusd_set_property_async(plugin, "ChargeControlEndThreshold",
+                                g_variant_new_byte(ctx->new_limit),
+                                (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
+        g_object_unref(plugin);
+        return;
+    }
+    if (ctx->new_limit != plugin->current_battery_limit) applied++;
+    
+    /* ===== 2. Затем ChangePlatformProfileOnAc ===== */
     if (step == applied && ctx->new_ac_enabled != plugin->auto_switch_ac_enabled) {
+        DEBUG_TRACE("  Applying ChangePlatformProfileOnAc: %d", ctx->new_ac_enabled);
         asusd_set_property_async(plugin, "ChangePlatformProfileOnAc",
                                 g_variant_new_boolean(ctx->new_ac_enabled),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
@@ -1668,7 +1695,9 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     }
     if (ctx->new_ac_enabled != plugin->auto_switch_ac_enabled) applied++;
     
+    /* ===== 3. ChangePlatformProfileOnBattery ===== */
     if (step == applied && ctx->new_battery_enabled != plugin->auto_switch_battery_enabled) {
+        DEBUG_TRACE("  Applying ChangePlatformProfileOnBattery: %d", ctx->new_battery_enabled);
         asusd_set_property_async(plugin, "ChangePlatformProfileOnBattery",
                                 g_variant_new_boolean(ctx->new_battery_enabled),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
@@ -1677,6 +1706,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     }
     if (ctx->new_battery_enabled != plugin->auto_switch_battery_enabled) applied++;
     
+    /* ===== 4. PlatformProfileOnAc ===== */
     if (step == applied && ctx->new_ac_profile &&
         g_strcmp0(ctx->new_ac_profile, plugin->auto_switch_ac_profile) != 0) {
         guint32 enum_val = 999;
@@ -1687,6 +1717,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
             apply_next_setting(ctx);
             return;
         }
+        DEBUG_TRACE("  Applying PlatformProfileOnAc: %s (enum %u)", ctx->new_ac_profile, enum_val);
         asusd_set_property_async(plugin, "PlatformProfileOnAc",
                                 g_variant_new_uint32(enum_val),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
@@ -1695,6 +1726,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
     }
     if (ctx->new_ac_profile && g_strcmp0(ctx->new_ac_profile, plugin->auto_switch_ac_profile) != 0) applied++;
     
+    /* ===== 5. PlatformProfileOnBattery ===== */
     if (step == applied && ctx->new_battery_profile &&
         g_strcmp0(ctx->new_battery_profile, plugin->auto_switch_battery_profile) != 0) {
         guint32 enum_val = 999;
@@ -1705,6 +1737,7 @@ void apply_next_setting(SettingsApplyContext *ctx) {
             apply_next_setting(ctx);
             return;
         }
+        DEBUG_TRACE("  Applying PlatformProfileOnBattery: %s (enum %u)", ctx->new_battery_profile, enum_val);
         asusd_set_property_async(plugin, "PlatformProfileOnBattery",
                                 g_variant_new_uint32(enum_val),
                                 (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
@@ -1712,14 +1745,6 @@ void apply_next_setting(SettingsApplyContext *ctx) {
         return;
     }
     if (ctx->new_battery_profile && g_strcmp0(ctx->new_battery_profile, plugin->auto_switch_battery_profile) != 0) applied++;
-    
-    if (step == applied && ctx->new_limit != plugin->current_battery_limit) {
-        asusd_set_property_async(plugin, "ChargeControlEndThreshold",
-                                g_variant_new_byte(ctx->new_limit),
-                                (GAsyncReadyCallback)on_settings_apply_step_done, ctx);
-        g_object_unref(plugin);
-        return;
-    }
     
     g_object_unref(plugin);
     on_settings_apply_complete(ctx);
