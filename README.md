@@ -57,6 +57,22 @@ sudo cp data/asusd.service /etc/systemd/system/
 sudo cp data/asusd.conf /etc/dbus-1/system.d/
 sudo mkdir /etc/asusd/
 sudo cp rog-aura/data/aura_support.ron /etc/asusd/
+```
+after some version of asusd there was asusd-user service added which now starts asusd, so to start asusd without it you need to edit (in proper way) systemd unit before enabling asusd daemon:
+
+```
+systemctl daemon-reload
+systemctl edit asusd
+```
+and add this text above "### Edits below this comment will be discarded" and save:
+
+```
+[Install]
+WantedBy=default.target
+```
+now you can enable asusd
+
+```
 sudo systemctl daemon-reload
 sudo systemctl enable --now asusd
 
